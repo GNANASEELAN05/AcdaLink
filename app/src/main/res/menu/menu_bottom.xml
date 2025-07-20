@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/menu_home"
+        android:title="Home"
+        android:icon="@drawable/icon_home_white"/>
+
+    <item
+        android:id="@+id/menu_chats"
+        android:title="Chats"
+        android:icon="@drawable/ic_chats_white" />
+    <item
+        android:id="@+id/projectUpload"
+        android:enabled="false"
+        android:title="Upload" />
+    <item
+        android:id="@+id/menu_my_fav"
+        android:icon="@drawable/ic_fav_white"
+        android:title="Bookmarks" />
+    <item
+        android:id="@+id/menu_account"
+        android:title="Account"
+        android:icon="@drawable/ic_person_white" />
+
+  
+</menu>

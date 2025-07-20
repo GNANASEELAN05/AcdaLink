@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1091888893348",
+    "project_id": "acdalinkprojects-d6c02",
+    "storage_bucket": "acdalinkprojects-d6c02.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1091888893348:android:19876b8e6e067231438531",
+        "android_client_info": {
+          "package_name": "com.example.acadlink"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1091888893348-9li1c32t7up4p1ni3k97k99n33eq5tkq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.acadlink",
+            "certificate_hash": "af14d64707a67801a53934d30e1aadf93a29aeee"
+          }
+        },
+        {
+          "client_id": "1091888893348-qbqghmts2cvphh3i5iamt87ijkm298ev.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBO7vFIeQynVARyBTD1ZEcaKlx0VkF5VHE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1091888893348-ck3l1u28g4dk4s7hqe6dhersbu9520le.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

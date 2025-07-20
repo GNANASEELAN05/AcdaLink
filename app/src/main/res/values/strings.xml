@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">AcadLink</string>
+    <string name="web_client_id">1091888893348-ck3l1u28g4dk4s7hqe6dhersbu9520le.apps.googleusercontent.com</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="not_have_account_register">Not Have Account? <b>Register</b></string>
+    <string name="already_have_account_login">Already Have Account? <b>Login</b></string>
+    <string name="forgot_password_recover">Forgot Password?<b>Recover</b></string>
+    <string name="back_button_description">Back</string>
+    <string-array name="departments_array">
+        <item>CSE</item>
+        <item>IT</item>
+        <item>ECE</item>
+        <item>Arts</item>
+        <item>Pharmacy</item>
+        <item>Biotech</item>
+        <item>BioMedical</item>
+        <item>FoodTechnology</item>
+    </string-array>
+
+
+</resources>

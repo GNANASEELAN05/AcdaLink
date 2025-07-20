@@ -1,0 +1,11 @@
+<!-- res/values/themes.xml -->
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.AcadLink" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Customize your theme here -->
+        <item name="colorPrimary">#03A9F4</item>
+        <item name="colorPrimaryVariant">#0288D1</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#FF4081</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+    </style>
+</resources>

@@ -1,0 +1,71 @@
+<!-- res/layout/activity_login_options.xml -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    tools:context=".LoginOptionsActivity">
+
+    <!-- Close Button -->
+    <ImageButton
+        android:id="@+id/closeBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:src="@drawable/ic_close_gray"
+        android:background="@android:color/transparent"
+        android:padding="10dp" />
+
+    <!-- Scrollable Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/closeBtn"
+        android:layout_marginTop="16dp"
+        android:layout_alignParentBottom="true"
+        android:padding="20dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <!-- App Logo -->
+            <ImageView
+                android:layout_width="150dp"
+                android:layout_height="150dp"
+                android:layout_gravity="center_horizontal"
+                android:adjustViewBounds="true"
+                android:src="@drawable/app_logo2" />
+
+            <!-- Continue With Email Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/loginEmailBtn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="30dp"
+                android:minHeight="48dp"
+                android:text="Continue With Email"
+                android:textColor="@android:color/white"
+                app:backgroundTint="#03A9F4"
+                app:cornerRadius="8dp"
+                app:icon="@drawable/ic_google_white"
+                app:iconPadding="8dp"
+                style="@style/Widget.MaterialComponents.Button" />
+
+            <!-- Welcome Text -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Welcome to AcadLink"
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </ScrollView>
+</RelativeLayout>
