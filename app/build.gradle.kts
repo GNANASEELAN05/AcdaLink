@@ -34,7 +34,7 @@ android {
     }
 
     buildFeatures {
-        viewBinding = true // ✅ Correct Kotlin DSL syntax
+        viewBinding = true
     }
 }
 
@@ -52,15 +52,19 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.crashlytics)
 
-    // ✅ Firebase Storage
+    // Firebase Storage
     implementation("com.google.firebase:firebase-storage:20.2.1")
 
-    // ✅ Glide for image loading
+    // Glide for image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
 
-    // ✅ Country Code Picker
+    // Country Code Picker
     implementation("com.hbb20:ccp:2.7.0")
+
+    // ✅ Retrofit for HTTP calls to Flask backend
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 
     // Testing
     testImplementation(libs.junit)

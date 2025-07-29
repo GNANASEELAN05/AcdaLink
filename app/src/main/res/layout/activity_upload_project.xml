@@ -37,7 +37,7 @@
             android:textStyle="bold" />
     </RelativeLayout>
 
-    <!-- Scrollable Content -->
+    <!-- Content -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -48,18 +48,26 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp"
-            android:background="#FFFFFF">
+            android:padding="16dp">
 
             <!-- Project Title -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/projectTitleTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Project Title"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
+                app:boxStrokeWidth="1dp"
                 app:startIconDrawable="@drawable/ic_title"
-                app:startIconTint="#7A7A7A">
+                app:startIconTint="#7A7A7A"
+                app:boxCornerRadiusTopStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusBottomEnd="8dp">
 
                 <EditText
                     android:id="@+id/projectTitleEt"
@@ -72,13 +80,22 @@
             <!-- Project Type 1 -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/projectType1Til"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:hint="Project Type (Software / Hardware)"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
+                app:boxStrokeWidth="1dp"
                 app:startIconDrawable="@drawable/ic_category"
-                app:startIconTint="#7A7A7A">
+                app:startIconTint="#7A7A7A"
+                app:boxCornerRadiusTopStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusBottomEnd="8dp">
 
                 <com.google.android.material.textfield.MaterialAutoCompleteTextView
                     android:id="@+id/projectType1Dropdown"
@@ -89,19 +106,28 @@
                     android:focusable="false"
                     android:clickable="true"
                     android:cursorVisible="false"
-                    android:textColor="#000000" />
+                    android:textColor="#000000"/>
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Project Type 2 -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/projectType2Til"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:hint="Project Level (Ordinary / Capstone)"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
+                app:boxStrokeWidth="1dp"
                 app:startIconDrawable="@drawable/ic_category"
-                app:startIconTint="#7A7A7A">
+                app:startIconTint="#7A7A7A"
+                app:boxCornerRadiusTopStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusBottomEnd="8dp">
 
                 <com.google.android.material.textfield.MaterialAutoCompleteTextView
                     android:id="@+id/projectType2Dropdown"
@@ -112,61 +138,78 @@
                     android:focusable="false"
                     android:clickable="true"
                     android:cursorVisible="false"
-                    android:textColor="#000000" />
+                    android:textColor="#000000"/>
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Abstract -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/abstractTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:hint="Abstract"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
+                app:boxStrokeWidth="1dp"
                 app:startIconDrawable="@drawable/ic_description"
-                app:startIconTint="#7A7A7A">
+                app:startIconTint="#7A7A7A"
+                app:boxCornerRadiusTopStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusBottomEnd="8dp">
 
                 <EditText
                     android:id="@+id/abstractEt"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:minLines="4"
-                    android:padding="16dp"
                     android:gravity="top"
+                    android:padding="16dp"
                     android:inputType="textMultiLine"
-                    android:textColor="#000000" />
+                    android:textColor="#000000"/>
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Methodology -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/methodologyTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:hint="Methodology"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
+                app:boxStrokeWidth="1dp"
                 app:startIconDrawable="@drawable/ic_description"
-                app:startIconTint="#7A7A7A">
+                app:startIconTint="#7A7A7A"
+                app:boxCornerRadiusTopStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusBottomEnd="8dp">
 
                 <EditText
                     android:id="@+id/methodologyEt"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:minLines="4"
-                    android:padding="16dp"
                     android:gravity="top"
+                    android:padding="16dp"
                     android:inputType="textMultiLine"
-                    android:textColor="#000000" />
+                    android:textColor="#000000"/>
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- Choose File Section -->
+            <!-- Choose File -->
             <LinearLayout
                 android:id="@+id/chooseFileWrapper"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
                 android:layout_marginTop="16dp"
-                android:layout_marginBottom="8dp">
+                android:orientation="vertical">
 
                 <com.google.android.material.card.MaterialCardView
                     android:id="@+id/chooseFileCv"
@@ -222,6 +265,16 @@
                     </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>
 
+                <!-- ✅ ADDED: File list display -->
+                <LinearLayout
+                    android:id="@+id/fileListLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="8dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"/>
+
                 <TextView
                     android:id="@+id/chooseFileError"
                     android:layout_width="wrap_content"
@@ -234,7 +287,7 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
-            <!-- Upload Project Button -->
+            <!-- Upload Button -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/uploadBtnCv"
                 android:layout_width="match_parent"
@@ -253,6 +306,7 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center"
+                    android:background="#03A9F4"
                     android:padding="16dp">
 
                     <TextView
@@ -260,12 +314,12 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Upload Project"
-                        android:textColor="#000000"
+                        android:textColor="#FFFFFF"
                         android:textSize="16sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Extra padding to allow scrolling above keyboard -->
+            <!-- Extra space -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="80dp" />

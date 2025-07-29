@@ -12,6 +12,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.bumptech.glide.Glide;
@@ -53,12 +54,16 @@ public class ProfileEditActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         EdgeToEdge.enable(this);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false); // ensures full edge-to-edge support
+
         binding = ActivityProfileEditBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        // ✅ Fix for keyboard + status bar (adds padding to top and bottom)
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, imeInsets.bottom);
             return insets;
         });
 
@@ -201,12 +206,12 @@ public class ProfileEditActivity extends AppCompatActivity {
         usersRef.child(firebaseAuth.getUid()).updateChildren(hashMap)
                 .addOnSuccessListener(unused -> {
                     progressDialog.dismiss();
-                    Utils.toast(ProfileEditActivity.this, "Profile updated successfully!Refresh and Check.");
+                    Utils.toast(ProfileEditActivity.this, "Profile updated successfully! Refresh and check.");
                     finish();
                 })
                 .addOnFailureListener(e -> {
                     progressDialog.dismiss();
                     Utils.toast(ProfileEditActivity.this, "Update failed: " + e.getMessage());
-           });
-}
+                });
+    }
 }

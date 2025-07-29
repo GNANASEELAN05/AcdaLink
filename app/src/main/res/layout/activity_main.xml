@@ -66,6 +66,5 @@
         android:layout_marginBottom="2dp"
         android:src="@drawable/ic_add_white"
         app:backgroundTint="#03A9F4"
-        app:tint="@color/black"
         android:contentDescription="Upload" />
 </RelativeLayout>

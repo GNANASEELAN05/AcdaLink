@@ -2,17 +2,23 @@ package com.example.acadlink;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.util.Patterns;
+import android.view.View;
 import android.widget.ArrayAdapter;
-import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.example.acadlink.databinding.ActivityRegisterEmailBinding;
@@ -33,17 +39,23 @@ public class RegisterEmailActivity extends AppCompatActivity {
 
     private String email, password, cPassword, name, phoneCode, phoneNumber, department;
 
+    // Password rule views
+    private LinearLayout passwordRulesLayout;
+    private TextView ruleLength, ruleUpper, ruleLower, ruleDigit, ruleSpecial;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         binding = ActivityRegisterEmailBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
-            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, imeInsets.bottom);
             return insets;
         });
 
@@ -54,42 +66,51 @@ public class RegisterEmailActivity extends AppCompatActivity {
         progressDialog.setTitle("Please wait...");
         progressDialog.setCanceledOnTouchOutside(false);
 
-        // Back button click
         ImageButton backBtn = findViewById(R.id.toolbarBackBtn);
         backBtn.setOnClickListener(v -> onBackPressed());
 
-        // Already have account
         binding.haveAccountTv.setOnClickListener(view -> onBackPressed());
 
-        // Register click
         binding.registerBtn.setOnClickListener(view -> validateData());
 
-        // Department Dropdown Setup
+        // Department Dropdown
         String[] departments = new String[]{
-                "Computer Science",
-                "Information Technology",
-                "Electronics and Communication",
-                "Electrical and Electronics",
-                "Mechanical Engineering",
-                "Civil Engineering",
-                "Artificial Intelligence",
-                "Data Science",
-                "Cyber Security",
-                "Pharmacy",
-                "Biotechnology",
-                "Biomedical",
-                "Food Technology",
-                "Arts"
+                "Computer Science", "Information Technology", "Electronics and Communication",
+                "Electrical and Electronics", "Mechanical Engineering", "Civil Engineering",
+                "Artificial Intelligence", "Data Science", "Cyber Security", "Pharmacy",
+                "Biotechnology", "Biomedical", "Food Technology", "Arts"
         };
 
         ArrayAdapter<String> departmentAdapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_dropdown_item_1line,
-                departments
+                this, android.R.layout.simple_dropdown_item_1line, departments
         );
-
         binding.departmentDropdown.setAdapter(departmentAdapter);
         binding.departmentDropdown.setOnClickListener(v -> binding.departmentDropdown.showDropDown());
+
+        // Initialize password rule views
+        passwordRulesLayout = findViewById(R.id.passwordRulesLayout);
+        ruleLength = findViewById(R.id.ruleLength);
+        ruleUpper = findViewById(R.id.ruleUpper);
+        ruleLower = findViewById(R.id.ruleLower);
+        ruleDigit = findViewById(R.id.ruleDigit);
+        ruleSpecial = findViewById(R.id.ruleSpecial);
+
+        passwordRulesLayout.setVisibility(View.GONE); // Initially hidden
+
+        // Password TextWatcher
+        binding.passwordEt.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void afterTextChanged(Editable s) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (s.length() > 0) {
+                    passwordRulesLayout.setVisibility(View.VISIBLE);
+                } else {
+                    passwordRulesLayout.setVisibility(View.GONE);
+                }
+                updatePasswordRules(s.toString());
+            }
+        });
     }
 
     private void validateData() {
@@ -129,6 +150,11 @@ public class RegisterEmailActivity extends AppCompatActivity {
             return;
         }
 
+        if (!isStrongPassword(password)) {
+            binding.passwordEt.setError("Password must be strong (8+ chars, upper, lower, digit, special)");
+            return;
+        }
+
         if (!password.equals(cPassword)) {
             binding.cPasswordEt.setError("Passwords do not match");
             return;
@@ -142,6 +168,10 @@ public class RegisterEmailActivity extends AppCompatActivity {
         registerUser();
     }
 
+    private boolean isStrongPassword(String password) {
+        return password.matches("^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!]).{8,}$");
+    }
+
     private void clearAllErrors() {
         binding.nameEt.setError(null);
         binding.phoneNumberEt.setError(null);
@@ -149,6 +179,17 @@ public class RegisterEmailActivity extends AppCompatActivity {
         binding.passwordEt.setError(null);
         binding.cPasswordEt.setError(null);
         binding.departmentDropdown.setError(null);
+    }
+
+    private void updatePasswordRules(String password) {
+        int green = Color.parseColor("#4CAF50");
+        int red = Color.RED;
+
+        ruleLength.setTextColor(password.length() >= 8 ? green : red);
+        ruleUpper.setTextColor(password.matches(".*[A-Z].*") ? green : red);
+        ruleLower.setTextColor(password.matches(".*[a-z].*") ? green : red);
+        ruleDigit.setTextColor(password.matches(".*\\d.*") ? green : red);
+        ruleSpecial.setTextColor(password.matches(".*[!@#$%^&+=].*") ? green : red);
     }
 
     private void registerUser() {
@@ -197,6 +238,6 @@ public class RegisterEmailActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> {
                     progressDialog.dismiss();
                     Utils.toast(this, "Failed to save: " + e.getMessage());
-           });
-}
+                });
+    }
 }

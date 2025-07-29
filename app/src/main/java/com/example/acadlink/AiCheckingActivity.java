@@ -3,12 +3,12 @@ package com.example.acadlink;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
-import android.view.View;
+import android.util.Log;
 import android.widget.ImageButton;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -16,12 +16,17 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.HashMap;
+import java.util.Map;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class AiCheckingActivity extends AppCompatActivity {
 
-    String projectTitle = "", abstractText = "", methodology = "";
+    String projectTitle, abstractText, methodology;
+    ApiService apiService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,109 +35,127 @@ public class AiCheckingActivity extends AppCompatActivity {
         setContentView(R.layout.activity_ai_checking);
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            Insets sys = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(sys.left, sys.top, sys.right, sys.bottom);
             return insets;
         });
 
         ImageButton toolbarBackBtn = findViewById(R.id.toolbarBackBtn);
-        toolbarBackBtn.setOnClickListener(v -> onBackPressed());
+        toolbarBackBtn.setOnClickListener(v -> finish());
 
+        // Get intent data with fallback values
         projectTitle = getIntent().getStringExtra("projectTitle");
         abstractText = getIntent().getStringExtra("abstract");
         methodology = getIntent().getStringExtra("methodology");
 
-        TableLayout tableLayout = findViewById(R.id.detailsTable);
-        addRow(tableLayout, "Project Title", projectTitle);
-        addRow(tableLayout, "Abstract", abstractText);
-        addRow(tableLayout, "Methodology", methodology);
+        if (projectTitle == null || projectTitle.trim().isEmpty()) projectTitle = "N/A";
+        if (abstractText == null || abstractText.trim().isEmpty()) abstractText = "N/A";
+        if (methodology == null || methodology.trim().isEmpty()) methodology = "N/A";
 
-        TextView checkButton = findViewById(R.id.checkButton);
-        checkButton.setOnClickListener(v -> {
-            ProgressDialog dialog = new ProgressDialog(AiCheckingActivity.this);
-            dialog.setMessage("Checking contents, please wait...");
-            dialog.setCancelable(false);
-            dialog.show();
+        // Add to table layout
+        TableLayout table = findViewById(R.id.detailsTable);
+        addRow(table, "Project Title", projectTitle);
+        addRow(table, "Abstract", abstractText);
+        addRow(table, "Methodology", methodology);
 
-            new Handler().postDelayed(() -> {
-                String combinedText = (abstractText + " " + methodology).toLowerCase();
+        // Init Retrofit service
+        apiService = RetrofitClient.getClient().create(ApiService.class);
 
-                int score = 0;
+        // Button click listener
+        findViewById(R.id.checkButtonCv).setOnClickListener(v -> {
+            ProgressDialog d = new ProgressDialog(this);
+            d.setMessage("Checking, please wait...");
+            d.setCancelable(false);
+            d.show();
 
-                // 1. Formal academic phrases
-                String[] formalPhrases = {
-                        "enhances efficiency", "streamline workflows", "structured format",
-                        "seamless integration", "maximize clarity", "refined documentation",
-                        "logical flow", "precise articulation", "ensures accuracy",
-                        "minimizing redundancy", "maintain consistency"
-                };
-                for (String phrase : formalPhrases) {
-                    if (combinedText.contains(phrase)) {
-                        score += 10;
-                        break;
+            // Upload project
+            Map<String, String> uploadRequest = new HashMap<>();
+            uploadRequest.put("title", projectTitle);
+            uploadRequest.put("abstract", abstractText);
+            uploadRequest.put("methodology", methodology);
+
+            apiService.uploadProject(uploadRequest).enqueue(new Callback<Void>() {
+                @Override
+                public void onResponse(Call<Void> call, Response<Void> response) {
+                    if (response.isSuccessful()) {
+
+                        // Prepare similarity request
+                        Map<String, String> similarityRequest = new HashMap<>();
+                        similarityRequest.put("abstract", abstractText);
+                        similarityRequest.put("methodology", methodology);
+
+                        Log.d("SIMILARITY", "text1: " + abstractText);
+                        Log.d("SIMILARITY", "text2: " + methodology);
+
+                        apiService.checkSimilarity(similarityRequest).enqueue(new Callback<SimilarityResponse>() {
+                            @Override
+                            public void onResponse(Call<SimilarityResponse> call, Response<SimilarityResponse> response) {
+                                if (response.isSuccessful() && response.body() != null) {
+                                    double similarityScore = response.body().getSimilarity();
+
+                                    // ✅ FIXED: Send separate fields instead of "text"
+                                    Map<String, String> aiRequest = new HashMap<>();
+                                    aiRequest.put("abstract", abstractText);
+                                    aiRequest.put("methodology", methodology);
+
+                                    Log.d("AI_DETECTION", "Abstract: " + abstractText);
+                                    Log.d("AI_DETECTION", "Methodology: " + methodology);
+
+                                    apiService.detectAiContent(aiRequest).enqueue(new Callback<AiDetectionResponse>() {
+                                        @Override
+                                        public void onResponse(Call<AiDetectionResponse> call, Response<AiDetectionResponse> response2) {
+                                            d.dismiss();
+                                            if (response2.isSuccessful() && response2.body() != null) {
+                                                double aiScore = response2.body().getPredictionScore();
+
+                                                Intent i = new Intent(AiCheckingActivity.this, ProjectReportActivity.class);
+                                                i.putExtra("projectTitle", projectTitle);
+                                                i.putExtra("similarity", String.format("%.1f%%", similarityScore * 100));
+                                                i.putExtra("aiGenerated", String.format("%.1f%% AI-generated", aiScore * 100));
+                                                startActivity(i);
+                                            } else {
+                                                showError("AI Detection failed: " + response2.code());
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onFailure(Call<AiDetectionResponse> call, Throwable t) {
+                                            d.dismiss();
+                                            showError("AI Detection error: " + t.getMessage());
+                                        }
+                                    });
+
+                                } else {
+                                    d.dismiss();
+                                    showError("Similarity check failed: " + response.code());
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(Call<SimilarityResponse> call, Throwable t) {
+                                d.dismiss();
+                                showError("Similarity check error: " + t.getMessage());
+                            }
+                        });
+
+                    } else {
+                        d.dismiss();
+                        showError("Upload failed: " + response.code());
                     }
                 }
 
-                // 2. Repetitive sentence structure
-                String[] sentences = combinedText.split("[.!?]");
-                int totalLength = 0;
-                for (String s : sentences) totalLength += s.trim().split("\\s+").length;
-                int avgLen = (sentences.length > 0) ? totalLength / sentences.length : 0;
-                int countSimilarLength = 0;
-                for (String s : sentences) {
-                    int len = s.trim().split("\\s+").length;
-                    if (Math.abs(len - avgLen) <= 3) countSimilarLength++;
+                @Override
+                public void onFailure(Call<Void> call, Throwable t) {
+                    d.dismiss();
+                    showError("Upload error: " + t.getMessage());
                 }
-                if (sentences.length > 0 && (countSimilarLength * 100 / sentences.length) > 70) {
-                    score += 10;
-                }
-
-                // 3. Lack of spelling errors (too clean)
-                if (!combinedText.matches(".*\\b(thier|teh|recieve|definately|enviroment)\\b.*")) {
-                    score += 10;
-                }
-
-                // 4. Passive + long sentences
-                int passiveCount = 0;
-                for (String s : sentences) {
-                    if (s.trim().split("\\s+").length > 25 && s.contains("was")) {
-                        passiveCount++;
-                    }
-                }
-                if (passiveCount >= 2) {
-                    score += 10;
-                }
-
-                // 5. Overly repeated vague academic words
-                Pattern p = Pattern.compile("\\b(approach|system|solution|implementation|designed|developed)\\b");
-                Matcher m = p.matcher(combinedText);
-                int wordMatchCount = 0;
-                while (m.find()) wordMatchCount++;
-                if (wordMatchCount >= 6) score += 10;
-
-                int aiPercent = Math.min(100, score);
-                String similarity = "12%"; // placeholder
-                String aiGenerated = aiPercent + "% AI-generated";
-
-                dialog.dismiss();
-
-                Intent intent = new Intent(AiCheckingActivity.this, ProjectReportActivity.class);
-                intent.putExtra("projectTitle", projectTitle);
-                intent.putExtra("similarity", similarity);
-                intent.putExtra("aiGenerated", aiGenerated);
-                startActivity(intent);
-
-            }, 5000); // 5 sec delay
+            });
         });
     }
 
     private void addRow(TableLayout table, String label, String value) {
         TableRow row = new TableRow(this);
         row.setBackgroundColor(0xFFFFFFFF);
-        row.setLayoutParams(new TableRow.LayoutParams(
-                TableRow.LayoutParams.MATCH_PARENT,
-                TableRow.LayoutParams.WRAP_CONTENT
-        ));
 
         TextView labelView = new TextView(this);
         labelView.setText(label + ":");
@@ -154,5 +177,10 @@ public class AiCheckingActivity extends AppCompatActivity {
         row.addView(valueView);
 
         table.addView(row);
+    }
+
+    private void showError(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        Log.e("ERROR", message);
     }
 }

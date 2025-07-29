@@ -82,6 +82,8 @@
 
                     <TextView
                         android:id="@+id/checkButton"
+                        android:clickable="false"
+                        android:focusable="false"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Check Similarity and AI Generated"

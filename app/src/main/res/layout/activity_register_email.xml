@@ -1,4 +1,3 @@
-<!-- register_email.xml -->
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -30,14 +29,13 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerInParent="true"
-            android:background="@android:color/transparent"
             android:text="Register"
             android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:textSize="18sp" />
     </RelativeLayout>
 
-    <!-- Main Content -->
+    <!-- Scrollable Content -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -47,8 +45,7 @@
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="16dp"
-            android:background="#FFFFFF">
+            android:padding="16dp">
 
             <!-- Profile Icon -->
             <com.google.android.material.imageview.ShapeableImageView
@@ -75,8 +72,10 @@
             <!-- Full Name -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/nameTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                style="@style/CustomTextInputLayout"
                 android:layout_width="match_parent"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_height="wrap_content"
                 android:layout_below="@id/registerLabelTv"
                 android:layout_marginTop="16dp"
@@ -89,8 +88,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textPersonName"
-                    android:textColor="#070707"
-                    android:textColorHint="#888888" />
+                    android:textColor="#070707" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Phone Layout -->
@@ -116,8 +114,10 @@
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/phoneNumberTil"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    style="@style/CustomTextInputLayout"
                     android:layout_width="0dp"
+                    app:hintTextColor="#03A9F4"
+                    android:textColorHint="#6E6E6E"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:hint="Phone Number"
@@ -129,17 +129,18 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="phone"
-                        android:textColor="#070707"
-                        android:textColorHint="#888888" />
+                        android:textColor="#070707" />
                 </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
             <!-- Email -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/emailTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                style="@style/CustomTextInputLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_below="@id/phoneLayout"
                 android:layout_marginTop="16dp"
                 android:hint="Email"
@@ -151,16 +152,17 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textEmailAddress"
-                    android:textColor="#070707"
-                    android:textColorHint="#888888" />
+                    android:textColor="#070707" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Department -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/departmentTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                style="@style/CustomTextInputLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_below="@id/emailTil"
                 android:layout_marginTop="16dp"
                 android:hint="Department"
@@ -176,17 +178,17 @@
                     android:clickable="true"
                     android:cursorVisible="false"
                     android:textColor="#070707"
-                    android:textColorHint="#888888"
                     android:drawableEnd="@drawable/ic_arrow_drop_down"
                     android:drawableRight="@drawable/ic_arrow_drop_down" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- Password -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/passwordTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                style="@style/CustomTextInputLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_below="@id/departmentTil"
                 android:layout_marginTop="16dp"
                 android:hint="Password"
@@ -199,17 +201,70 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textPassword"
-                    android:textColor="#020202"
-                    android:textColorHint="#888888" />
+                    android:textColor="#020202" />
             </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Password Rules -->
+            <LinearLayout
+                android:id="@+id/passwordRulesLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/passwordTil"
+                android:layout_marginTop="4dp"
+                android:layout_marginStart="30dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/ruleLength"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="• Minimum 8 Characters"
+                    android:textColor="#FF0000"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/ruleUpper"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="• At least 1 Uppercase Letter"
+                    android:textColor="#FF0000"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/ruleLower"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="• At least 1 Lowercase Letter"
+                    android:textColor="#FF0000"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/ruleDigit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="• At least 1 Number"
+                    android:textColor="#FF0000"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/ruleSpecial"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="• At least 1 Special Character"
+                    android:textColor="#FF0000"
+                    android:textSize="14sp" />
+            </LinearLayout>
 
             <!-- Confirm Password -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/cPasswordTil"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                style="@style/CustomTextInputLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_below="@id/passwordTil"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
+                android:layout_below="@id/passwordRulesLayout"
                 android:layout_marginTop="16dp"
                 android:hint="Confirm Password"
                 app:passwordToggleEnabled="true"
@@ -221,8 +276,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textPassword"
-                    android:textColor="#0D0D0D"
-                    android:textColorHint="#888888" />
+                    android:textColor="#0D0D0D" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Already Have Account -->
@@ -247,6 +301,10 @@
                 android:textColor="#FFFFFF"
                 app:backgroundTint="#03A9F4"
                 app:cornerRadius="8dp" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="50dp" />
         </RelativeLayout>
     </ScrollView>
 </RelativeLayout>

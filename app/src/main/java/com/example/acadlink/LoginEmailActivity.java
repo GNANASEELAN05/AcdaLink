@@ -6,13 +6,13 @@ import android.os.Bundle;
 import android.util.Patterns;
 import android.view.View;
 import android.widget.ImageButton;
-import android.widget.TextView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.example.acadlink.databinding.ActivityLoginEmailBinding;
@@ -36,14 +36,18 @@ public class LoginEmailActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
 
+        // ✅ Allow scroll when keyboard is shown
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
         // View Binding
         binding = ActivityLoginEmailBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Edge to edge padding
+        // ✅ Proper padding with keyboard and system bars
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+            v.setPadding(bars.left, bars.top, bars.right, ime.bottom);
             return insets;
         });
 

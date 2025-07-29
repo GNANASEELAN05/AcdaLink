@@ -56,7 +56,7 @@
                 android:layout_width="70dp"
                 android:layout_height="70dp"
                 android:layout_centerHorizontal="true"
-                android:backgroundTint="#03A9F4"
+                android:background="#03A9F4"
                 android:src="@drawable/ic_person_white"
                 app:shapeAppearanceOverlay="@style/ImageStyle_circle" />
 
@@ -80,6 +80,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_below="@id/loginLabelTv"
+                app:boxBackgroundMode="outline"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
+                app:boxStrokeColor="@color/black"
                 android:layout_marginTop="20dp"
                 android:hint="Email"
                 app:startIconDrawable="@drawable/ic_email_white"
@@ -91,8 +95,11 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textEmailAddress"
-                    android:textColor="#000000"
-                    android:textColorHint="#888888" />
+                    android:paddingStart="40dp"
+                    android:paddingTop="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="16dp"
+                    android:textColor="#000000" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Password Input -->
@@ -102,13 +109,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_below="@id/emailTil"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
                 android:layout_marginTop="16dp"
                 android:hint="Password"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 app:startIconDrawable="@drawable/ic_lock_white"
                 app:startIconTint="#6E6E6E"
                 app:endIconMode="password_toggle"
-                app:errorEnabled="true"
-                app:passwordToggleEnabled="true">
+                app:errorEnabled="true">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/passwordEt"
@@ -116,7 +126,11 @@
                     android:layout_height="wrap_content"
                     android:inputType="textPassword"
                     android:textColor="#000000"
-                    android:textColorHint="#888888" />
+                    android:textColorHint="#6E6E6E"
+                    android:paddingStart="40dp"
+                    android:paddingTop="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="16dp" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- No Account + Forgot Password -->
@@ -153,6 +167,11 @@
                 android:textColor="@android:color/white"
                 android:backgroundTint="#03A9F4"
                 app:cornerRadius="8dp" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="20dp" />
+
         </RelativeLayout>
     </ScrollView>
 </RelativeLayout>

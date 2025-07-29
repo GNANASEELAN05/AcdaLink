@@ -270,7 +270,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Edit Profile"
-                        android:textColor="@color/black" />
+                        android:textColor="@color/black1" />
 
                     <ImageView
                         android:layout_width="24dp"
@@ -309,7 +309,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Verify Account"
-                        android:textColor="@color/black" />
+                        android:textColor="@color/black1" />
 
                     <ImageView
                         android:layout_width="24dp"
@@ -348,7 +348,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Logout"
-                        android:textColor="@color/black" />
+                        android:textColor="@color/black1" />
 
                     <ImageView
                         android:layout_width="24dp"

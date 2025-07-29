@@ -1,5 +1,6 @@
 package com.example.acadlink;
 
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
@@ -12,19 +13,24 @@ import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.documentfile.provider.DocumentFile;
 
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.android.material.textfield.TextInputLayout;
 
+import java.util.ArrayList;
+
 public class UploadProjectActivity extends AppCompatActivity {
 
-    private static final int FILE_PICKER_REQUEST_CODE = 101;
-    private static final long MAX_FILE_SIZE_MB = 10;
+    private static final int REQUEST_FILE = 101;
+    private static final int REQUEST_FOLDER = 102;
+    private static final long MAX_TOTAL_FILE_SIZE_MB = 5;
 
     private MaterialAutoCompleteTextView projectType1Dropdown, projectType2Dropdown;
     private EditText projectTitleEt, abstractEt, methodologyEt;
@@ -32,23 +38,20 @@ public class UploadProjectActivity extends AppCompatActivity {
     private MaterialCardView chooseFileCv, uploadBtnCv;
     private TextInputLayout projectTitleTil, projectType1Til, projectType2Til, abstractTil, methodologyTil;
     private ImageView clearFileBtn;
+    private LinearLayout fileListLayout;
 
-    private Uri selectedFileUri = null;
-    private boolean isFolderSelected = false;
-
-    private final ColorStateList vibrantRed = ColorStateList.valueOf(0xFFD32F2F); // Dark Vibrant Red
+    private final ArrayList<Uri> selectedUris = new ArrayList<>();
+    private final ArrayList<String> selectedFileInfo = new ArrayList<>();
+    private final ColorStateList vibrantRed = ColorStateList.valueOf(0xFFD32F2F);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // ❌ Removed EdgeToEdge
-        setContentView(R.layout.activity_upload_project); // Make sure your root layout is ScrollView with fillViewport=true
+        setContentView(R.layout.activity_upload_project);
 
-        // Toolbar
         ImageButton toolbarBackBtn = findViewById(R.id.toolbarBackBtn);
         toolbarBackBtn.setOnClickListener(v -> onBackPressed());
 
-        // Views
         projectTitleEt = findViewById(R.id.projectTitleEt);
         abstractEt = findViewById(R.id.abstractEt);
         methodologyEt = findViewById(R.id.methodologyEt);
@@ -60,73 +63,67 @@ public class UploadProjectActivity extends AppCompatActivity {
         chooseFileCv = findViewById(R.id.chooseFileCv);
         uploadBtnCv = findViewById(R.id.uploadBtnCv);
         clearFileBtn = findViewById(R.id.clearFileBtn);
+        fileListLayout = findViewById(R.id.fileListLayout);
 
-        // TextInputLayouts
         projectTitleTil = findViewById(R.id.projectTitleTil);
         projectType1Til = findViewById(R.id.projectType1Til);
         projectType2Til = findViewById(R.id.projectType2Til);
         abstractTil = findViewById(R.id.abstractTil);
         methodologyTil = findViewById(R.id.methodologyTil);
 
+        applyOutlinedStyle(projectTitleTil);
+        applyOutlinedStyle(projectType1Til);
+        applyOutlinedStyle(projectType2Til);
+        applyOutlinedStyle(abstractTil);
+        applyOutlinedStyle(methodologyTil);
+
         setErrorColors();
         setupDropdowns();
 
-        chooseFileCv.setOnClickListener(v -> showFileOrFolderChooser());
+        chooseFileCv.setOnClickListener(v -> showChooserDialog());
 
         clearFileBtn.setOnClickListener(v -> {
-            selectedFileUri = null;
-            chooseFileBtn.setText("Choose File");
+            selectedUris.clear();
+            selectedFileInfo.clear();
+            chooseFileBtn.setText("Choose File(s)/Folder");
             clearFileBtn.setVisibility(View.GONE);
             chooseFileCv.setStrokeColor(Color.parseColor("#7A7A7A"));
             chooseFileError.setVisibility(View.GONE);
+            fileListLayout.removeAllViews();
         });
 
         uploadBtnCv.setOnClickListener(v -> {
             if (validateAndUpload()) {
-                Intent intent = new Intent(UploadProjectActivity.this, ProjectDetailsActivity.class);
+                Intent intent = new Intent(this, ProjectDetailsActivity.class);
                 intent.putExtra("projectTitle", projectTitleEt.getText().toString());
                 intent.putExtra("projectType1", projectType1Dropdown.getText().toString());
                 intent.putExtra("projectType2", projectType2Dropdown.getText().toString());
                 intent.putExtra("abstract", abstractEt.getText().toString());
                 intent.putExtra("methodology", methodologyEt.getText().toString());
-                intent.putExtra("fileName", chooseFileBtn.getText().toString());
+                intent.putExtra("fileCount", selectedUris.size());
+                intent.putStringArrayListExtra("fileInfoList", selectedFileInfo);
                 startActivity(intent);
             }
         });
     }
 
-    private void setErrorColors() {
-        projectTitleTil.setErrorTextColor(vibrantRed);
-        projectType1Til.setErrorTextColor(vibrantRed);
-        projectType2Til.setErrorTextColor(vibrantRed);
-        abstractTil.setErrorTextColor(vibrantRed);
-        methodologyTil.setErrorTextColor(vibrantRed);
-    }
-
-    private void setupDropdowns() {
-        String[] type1Options = {"Software", "Hardware"};
-        String[] type2Options = {"Ordinary Project", "Final Year Capstone Project"};
-
-        ArrayAdapter<String> adapter1 = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type1Options);
-        projectType1Dropdown.setAdapter(adapter1);
-        projectType1Dropdown.setOnClickListener(v -> projectType1Dropdown.showDropDown());
-
-        ArrayAdapter<String> adapter2 = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type2Options);
-        projectType2Dropdown.setAdapter(adapter2);
-        projectType2Dropdown.setOnClickListener(v -> projectType2Dropdown.showDropDown());
-    }
-
-    private void showFileOrFolderChooser() {
-        Intent zipIntent = new Intent(Intent.ACTION_GET_CONTENT);
-        zipIntent.setType("application/zip");
-        zipIntent.addCategory(Intent.CATEGORY_OPENABLE);
-
-        Intent folderIntent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        folderIntent.addCategory(Intent.CATEGORY_DEFAULT);
-
-        Intent chooser = Intent.createChooser(zipIntent, "Select ZIP file or Folder");
-        chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{folderIntent});
-        startActivityForResult(chooser, FILE_PICKER_REQUEST_CODE);
+    private void showChooserDialog() {
+        String[] options = {"Choose Files", "Choose Folder"};
+        new AlertDialog.Builder(this)
+                .setTitle("Select Upload Type")
+                .setItems(options, (dialog, which) -> {
+                    Intent intent;
+                    if (which == 0) {
+                        intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        intent.setType("*/*");
+                        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        startActivityForResult(intent, REQUEST_FILE);
+                    } else {
+                        intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                        startActivityForResult(intent, REQUEST_FOLDER);
+                    }
+                }).show();
     }
 
     @Override
@@ -134,38 +131,90 @@ public class UploadProjectActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode != RESULT_OK || data == null) return;
 
-        Uri uri = data.getData();
-        if (uri == null) return;
+        fileListLayout.removeAllViews();
+        selectedUris.clear();
+        selectedFileInfo.clear();
+        chooseFileError.setVisibility(View.GONE);
 
-        if (isTreeUri(uri)) {
-            getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            selectedFileUri = uri;
-            isFolderSelected = true;
-            chooseFileBtn.setText("Folder: " + getLastSegment(uri));
-        } else {
-            isFolderSelected = false;
-            if (!uri.toString().endsWith(".zip") && !getFileName(uri).toLowerCase().endsWith(".zip")) {
-                chooseFileError.setText("Only ZIP files or folders are allowed");
-                chooseFileError.setVisibility(View.VISIBLE);
-                chooseFileCv.setStrokeColor(Color.parseColor("#D32F2F"));
-                return;
+        long totalSizeBytes = 0;
+        boolean hasOversized = false;
+
+        if (requestCode == REQUEST_FILE) {
+            if (data.getClipData() != null) {
+                int count = data.getClipData().getItemCount();
+                for (int i = 0; i < count; i++) {
+                    Uri uri = data.getClipData().getItemAt(i).getUri();
+                    long size = getFileSize(uri);
+                    if (totalSizeBytes + size > MAX_TOTAL_FILE_SIZE_MB * 1024 * 1024) {
+                        hasOversized = true;
+                        continue;
+                    }
+                    selectedUris.add(uri);
+                    totalSizeBytes += size;
+                    addFileToList(uri, selectedUris.size());
+                }
+            } else {
+                Uri uri = data.getData();
+                long size = getFileSize(uri);
+                if (size > MAX_TOTAL_FILE_SIZE_MB * 1024 * 1024) {
+                    hasOversized = true;
+                } else {
+                    selectedUris.add(uri);
+                    addFileToList(uri, 1);
+                }
             }
-
-            long fileSizeMB = getFileSize(uri) / (1024 * 1024);
-            if (fileSizeMB > MAX_FILE_SIZE_MB) {
-                chooseFileError.setText("ZIP file too large (Max 10MB)");
-                chooseFileError.setVisibility(View.VISIBLE);
-                chooseFileCv.setStrokeColor(Color.parseColor("#D32F2F"));
-                return;
+        } else if (requestCode == REQUEST_FOLDER) {
+            Uri treeUri = data.getData();
+            getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            DocumentFile folder = DocumentFile.fromTreeUri(this, treeUri);
+            if (folder != null && folder.isDirectory()) {
+                int count = 1;
+                addFileToList(folder.getUri(), 0); // primary folder
+                for (DocumentFile file : folder.listFiles()) {
+                    if (file.isFile()) {
+                        long size = file.length();
+                        if (totalSizeBytes + size > MAX_TOTAL_FILE_SIZE_MB * 1024 * 1024) {
+                            hasOversized = true;
+                            continue;
+                        }
+                        selectedUris.add(file.getUri());
+                        totalSizeBytes += size;
+                        addFileToList(file.getUri(), count++);
+                    }
+                }
             }
-
-            selectedFileUri = uri;
-            chooseFileBtn.setText("ZIP: " + getFileName(uri));
         }
 
-        clearFileBtn.setVisibility(View.VISIBLE);
-        chooseFileError.setVisibility(View.GONE);
-        chooseFileCv.setStrokeColor(Color.parseColor("#7A7A7A"));
+        if (!selectedUris.isEmpty()) {
+            chooseFileBtn.setText(selectedUris.size() + " file(s) selected");
+            clearFileBtn.setVisibility(View.VISIBLE);
+            chooseFileCv.setStrokeColor(Color.parseColor("#7A7A7A"));
+        }
+
+        if (hasOversized) {
+            chooseFileError.setText("Some files exceed the total 5MB limit and were not selected");
+            chooseFileError.setVisibility(View.VISIBLE);
+            chooseFileCv.setStrokeColor(Color.parseColor("#D32F2F"));
+        }
+    }
+
+    private void addFileToList(Uri uri, int count) {
+        String name = getFileName(uri);
+        long sizeKB = getFileSize(uri) / 1024;
+        String sizeText = sizeKB >= 1024
+                ? String.format("%.1f MB", sizeKB / 1024f)
+                : sizeKB + " KB";
+
+        String info = count == 0
+                ? "Primary Folder: " + name
+                : count + ". " + name + " (" + sizeText + ")";
+        selectedFileInfo.add(info);
+
+        TextView fileView = new TextView(this);
+        fileView.setText(info);
+        fileView.setTextColor(Color.DKGRAY);
+        fileView.setTextSize(14);
+        fileListLayout.addView(fileView);
     }
 
     private boolean validateAndUpload() {
@@ -196,52 +245,61 @@ public class UploadProjectActivity extends AppCompatActivity {
             valid = false;
         } else methodologyTil.setError(null);
 
-        if (selectedFileUri == null) {
+        if (selectedUris.isEmpty()) {
             chooseFileCv.setStrokeColor(Color.parseColor("#D32F2F"));
-            chooseFileError.setText("Please select a ZIP file or folder");
+            chooseFileError.setText("Please select at least one file/folder");
             chooseFileError.setVisibility(View.VISIBLE);
             valid = false;
-        } else {
-            chooseFileCv.setStrokeColor(Color.parseColor("#7A7A7A"));
-            chooseFileError.setVisibility(View.GONE);
         }
 
         return valid;
     }
 
-    private boolean isTreeUri(Uri uri) {
-        return "com.android.externalstorage.documents".equals(uri.getAuthority()) ||
-                "com.android.providers.downloads.documents".equals(uri.getAuthority()) ||
-                "com.android.providers.media.documents".equals(uri.getAuthority()) ||
-                "com.android.providers.documents.documents".equals(uri.getAuthority());
+    private void applyOutlinedStyle(TextInputLayout til) {
+        til.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        til.setBoxStrokeWidth(2);
+        til.setBoxCornerRadii(10, 10, 10, 10);
+        til.setBoxStrokeColor(Color.parseColor("#03A9F4"));
+    }
+
+    private void setErrorColors() {
+        projectTitleTil.setErrorTextColor(vibrantRed);
+        projectType1Til.setErrorTextColor(vibrantRed);
+        projectType2Til.setErrorTextColor(vibrantRed);
+        abstractTil.setErrorTextColor(vibrantRed);
+        methodologyTil.setErrorTextColor(vibrantRed);
+    }
+
+    private void setupDropdowns() {
+        String[] type1Options = {"Software", "Hardware"};
+        String[] type2Options = {"Ordinary Project", "Final Year Capstone Project"};
+
+        ArrayAdapter<String> adapter1 = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type1Options);
+        projectType1Dropdown.setAdapter(adapter1);
+        projectType1Dropdown.setOnClickListener(v -> projectType1Dropdown.showDropDown());
+
+        ArrayAdapter<String> adapter2 = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type2Options);
+        projectType2Dropdown.setAdapter(adapter2);
+        projectType2Dropdown.setOnClickListener(v -> projectType2Dropdown.showDropDown());
     }
 
     private long getFileSize(Uri uri) {
-        Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-        int sizeIndex = cursor != null ? cursor.getColumnIndex(OpenableColumns.SIZE) : -1;
-        long size = 0;
-        if (cursor != null && cursor.moveToFirst() && sizeIndex != -1) {
-            size = cursor.getLong(sizeIndex);
+        try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
+                if (sizeIndex != -1) return cursor.getLong(sizeIndex);
+            }
         }
-        if (cursor != null) cursor.close();
-        return size;
+        return 0;
     }
 
     private String getFileName(Uri uri) {
-        Cursor cursor = getContentResolver().query(uri, null, null, null, null);
-        int nameIndex = cursor != null ? cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) : -1;
-        String name = null;
-        if (cursor != null && cursor.moveToFirst() && nameIndex != -1) {
-            name = cursor.getString(nameIndex);
+        try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (nameIndex != -1) return cursor.getString(nameIndex);
+            }
         }
-        if (cursor != null) cursor.close();
-        return name;
+        return uri.getLastPathSegment();
     }
-
-    private String getLastSegment(Uri uri) {
-        String path = uri.getLastPathSegment();
-        if (path == null) return "Selected";
-        if (path.contains("/")) return path.substring(path.lastIndexOf('/') + 1);
-        return path;
-    }
-}
+} 

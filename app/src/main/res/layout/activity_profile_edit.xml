@@ -66,16 +66,6 @@
                     android:src="@drawable/ic_person_white"
                     app:shapeAppearanceOverlay="@style/ImageStyle_circle" />
 
-                <com.google.android.material.floatingactionbutton.FloatingActionButton
-                    android:id="@+id/profileImagePickFab"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:layout_alignParentBottom="true"
-                    android:src="@drawable/ic_add_photo_white"
-                    app:backgroundTint="#DBCCC6"
-                    app:fabSize="mini"
-                    app:tint="@android:color/white" />
             </RelativeLayout>
 
             <!-- All Inputs -->
@@ -85,6 +75,8 @@
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_marginTop="16dp"
                 android:hint="Name"
                 app:startIconDrawable="@drawable/ic_person_white"
@@ -95,8 +87,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textPersonName|textCapWords"
-                    android:textColor="#070707"
-                    android:textColorHint="#888888" />
+                    android:textColor="#070707" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- DOB -->
@@ -105,6 +96,8 @@
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_marginTop="10dp"
                 android:hint="DOB (dd/MM/yyyy)"
                 app:startIconDrawable="@drawable/ic_calender_white"
@@ -115,8 +108,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="none"
-                    android:textColor="#020202"
-                    android:textColorHint="#888888" />
+                    android:textColor="#020202" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Email -->
@@ -124,6 +116,8 @@
                 android:id="@+id/emailTil"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:hint="Email"
@@ -134,10 +128,9 @@
                     android:id="@+id/emailEt"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textEmailAddress"
                     android:enabled="false"
-                    android:textColor="#000000"
-                    android:textColorHint="#888888" />
+                    android:inputType="textEmailAddress"
+                    android:textColor="#000000" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Department -->
@@ -145,6 +138,8 @@
                 android:id="@+id/departmentTil"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
+                app:hintTextColor="#03A9F4"
+                android:textColorHint="#6E6E6E"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:hint="Department"
@@ -160,7 +155,6 @@
                     android:clickable="true"
                     android:cursorVisible="false"
                     android:textColor="#070707"
-                    android:textColorHint="#888888"
                     android:drawableEnd="@drawable/ic_arrow_drop_down"
                     android:drawableRight="@drawable/ic_arrow_drop_down" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -189,6 +183,8 @@
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    app:hintTextColor="#03A9F4"
+                    android:textColorHint="#6E6E6E"
                     android:layout_toEndOf="@id/countryCodePicker"
                     android:hint="Phone Number"
                     app:startIconDrawable="@drawable/ic_call_white"
@@ -199,8 +195,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="phone"
-                        android:textColor="#020202"
-                        android:textColorHint="#888888" />
+                        android:textColor="#020202" />
                 </com.google.android.material.textfield.TextInputLayout>
             </RelativeLayout>
 
@@ -213,9 +208,13 @@
                 android:minHeight="48dp"
                 android:text="UPDATE"
                 android:textColor="#FFFFFF"
-                android:background="#03A9F4"
-                app:cornerRadius="8dp"
-                app:icon="@drawable/ic_person_white" />
+                android:backgroundTint="#03A9F4"
+                app:icon="@drawable/ic_person_white"
+                app:cornerRadius="8dp"/>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="50dp" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

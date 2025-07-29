@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.acadlink">
-
     <!-- Required for Firebase and network operations -->
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -11,13 +10,15 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="AcadLink"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AcadLink"
+        android:theme="@style/Theme.AcdaLink"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
-
+        <activity
+            android:name=".ApiTestActivity"
+            android:exported="false" />
         <activity
             android:name=".ProjectReportActivity"
             android:exported="false" />
@@ -26,50 +27,35 @@
             android:exported="false" />
         <activity
             android:name=".ProjectDetailsActivity"
-            android:exported="false" />
-
-        <!-- Launcher Activity -->
+            android:exported="false" /> <!-- Launcher Activity -->
         <activity
             android:name=".LoginOptionsActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
-
-        <!-- Login with Email -->
+        </activity> <!-- Login with Email -->
         <activity
             android:name=".LoginEmailActivity"
-            android:exported="false" />
-
-        <!-- Registration -->
+            android:exported="false" /> <!-- Registration -->
         <activity
             android:name=".RegisterEmailActivity"
-            android:exported="false" />
-
-        <!-- Forgot Password -->
+            android:exported="false" /> <!-- Forgot Password -->
         <activity
             android:name=".ForgetPasswordActivity"
-            android:exported="false" />
-
-        <!-- Home Screen -->
+            android:exported="false" /> <!-- Home Screen -->
         <activity
             android:name=".MainActivity"
-            android:exported="true" />
-
-        <!-- Upload Project (keyboard fix applied here) -->
+            android:exported="true" /> <!-- Upload Project (keyboard fix applied here) -->
         <activity
             android:name=".UploadProjectActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
-
-        <!-- Profile Edit -->
+            android:windowSoftInputMode="adjustResize" /> <!-- Profile Edit -->
         <activity
             android:name=".ProfileEditActivity"
-            android:exported="false" />
-
-        <!-- Account Deletion -->
+            android:exported="false" /> <!-- Account Deletion -->
         <activity
             android:name=".DeleteAccountActivity"
             android:exported="false" />

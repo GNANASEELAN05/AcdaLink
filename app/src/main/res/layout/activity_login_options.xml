@@ -43,8 +43,11 @@
                 android:src="@drawable/app_logo2" />
 
             <!-- Continue With Email Button -->
+
+            <!-- Welcome Text -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/loginEmailBtn"
+                style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="30dp"
@@ -54,10 +57,8 @@
                 app:backgroundTint="#03A9F4"
                 app:cornerRadius="8dp"
                 app:icon="@drawable/ic_google_white"
-                app:iconPadding="8dp"
-                style="@style/Widget.MaterialComponents.Button" />
+                app:iconPadding="8dp" />
 
-            <!-- Welcome Text -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
