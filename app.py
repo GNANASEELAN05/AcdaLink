@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # Load models
 similarity_model = SentenceTransformer('all-MiniLM-L6-v2')
-model_path = r"C:\Users\Gnanaseelan V\Downloads\ai_backend\training_model"
+model_path = r"C:\Users\Gnanaseelan V\Downloads\ai_backend\roberta_detector_model"
 ai_tokenizer = AutoTokenizer.from_pretrained(model_path)
 ai_model = AutoModelForSequenceClassification.from_pretrained(model_path)
 

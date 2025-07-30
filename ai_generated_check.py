@@ -1,7 +1,7 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 
-model_path = r"C:\Users\Gnanaseelan V\Downloads\ai_backend\training_model"
+model_path = r"C:\Users\Gnanaseelan V\Downloads\ai_backend\roberta_detector_model"
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForSequenceClassification.from_pretrained(model_path)
 
