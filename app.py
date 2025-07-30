@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from similarity_check import get_similarity_score
 from ai_generated_check import detect_ai_generated
+import os
 
 app = Flask(__name__)
 
@@ -25,6 +26,7 @@ def check_similarity():
     similarity = get_similarity_score(current_text, previous_project_text)
     return jsonify({"similarity": similarity})
 
+
 @app.route('/check-ai', methods=['POST'])
 def detect_ai():
     data = request.get_json()
@@ -44,6 +46,7 @@ def detect_ai():
         }]
     })
 
+
 @app.route('/upload-project', methods=['POST'])
 def upload_project():
     global previous_project_text
@@ -58,5 +61,7 @@ def upload_project():
     previous_project_text = abstract + " " + methodology
     return jsonify({"status": "Previous project uploaded successfully."})
 
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
