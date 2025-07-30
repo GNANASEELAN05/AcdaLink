@@ -1,14 +1,16 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 
-model_path = r"C:\Users\Gnanaseelan V\Downloads\ai_backend\training_model"
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-model = AutoModelForSequenceClassification.from_pretrained(model_path)
+# Load from Hugging Face — deployable in Render
+model_name = "Hello-SimpleAI/chatgpt-detector-roberta"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSequenceClassification.from_pretrained(model_name)
 
 def ai_detection_model(text):
     if not text.strip():
         return [{"label": "Unknown", "score": 0.0}]
 
+    # Tokenize input
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
 
     with torch.no_grad():
@@ -18,10 +20,13 @@ def ai_detection_model(text):
     ai_raw = probs[0][1].item()
     human_raw = probs[0][0].item()
 
-    ai_score = min(max(round(ai_raw ** 1.8, 4), 0.0), 0.95)
-    human_score = min(max(round(human_raw ** 1.5, 4), 0.0), 0.95)
+    # 🔧 Force AI-generated score to be capped at 0.4
+    # Scale linearly and cap
+    ai_score = round(min(ai_raw * 0.4, 0.4), 4)
+    human_score = round(min(human_raw * 0.95, 0.95), 4)
 
-    if ai_score > 0.85 and human_score < 0.5:
+    # Label logic (based on capped score)
+    if ai_score > 0.35 and human_score < 0.5:
         label = "AI-Generated"
         score = ai_score
     elif human_score > 0.65:
