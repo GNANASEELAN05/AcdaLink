@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
+import os
 
 app = Flask(__name__)
 
@@ -91,5 +92,7 @@ def upload_project():
     previous_project_text = abstract + " " + methodology
     return jsonify({"status": "Previous project uploaded successfully."})
 
+# ✅ Modified only this block to support deployment
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
