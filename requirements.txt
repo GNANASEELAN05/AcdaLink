@@ -1,4 +1,0 @@
-flask
-sentence-transformers
-transformers
-torch
