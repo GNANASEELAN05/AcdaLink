@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <!-- Toolbar -->
+    <RelativeLayout
+        android:id="@+id/toolbarRl"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:background="#03A9F4"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/psBackBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:background="@android:color/transparent"
+            android:padding="10dp"
+            android:src="@drawable/ic_back_white"
+            android:tint="@android:color/white" />
+
+        <TextView
+            android:id="@+id/toolbarTitleTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="My Project Summary"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <!-- Scrollable Table -->
+    <ScrollView
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:fillViewport="false"
+        android:padding="12dp"
+        android:background="#FFFFFF"
+        app:layout_constraintTop_toBottomOf="@id/toolbarRl"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Table with borders (table background white; each cell uses @drawable/cell_border) -->
+        <TableLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stretchColumns="1"
+            android:background="#FFFFFF"
+            android:padding="1dp">
+
+            <!-- Row 1 -->
+            <TableRow>
+                <!-- LABEL: fill row height, vertically centered -->
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="1.  Project Title"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <!-- VALUE: wrap content (determines row height), top aligned -->
+                <TextView
+                    android:id="@+id/psTitleTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row 2 -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="2.  Project Type"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+                <TextView
+                    android:id="@+id/psTypeTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row 3 -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="3.  Project Level"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+                <TextView
+                    android:id="@+id/psLevelTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row 4 -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="4.  Abstract"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+                <TextView
+                    android:id="@+id/psAbstractTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row 5 -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="5.  Methodology"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+                <TextView
+                    android:id="@+id/psMethodologyTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row 6 -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="6.  Similarity"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+                <TextView
+                    android:id="@+id/psSimilarityTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row 7 -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="7.  AI Generated"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+                <TextView
+                    android:id="@+id/psAiTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row 8 -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="8.  Files"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/psFilesTv"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:background="@drawable/cell_border"
+                    android:gravity="top|start"
+                    android:padding="8dp"
+                    android:textColor="#333333"/>
+            </TableRow>
+
+        </TableLayout>
+    </ScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

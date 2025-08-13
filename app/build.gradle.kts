@@ -54,6 +54,9 @@ dependencies {
 
     // Firebase Storage
     implementation("com.google.firebase:firebase-storage:20.2.1")
+    implementation ("com.google.firebase:firebase-database:20.2.2")
+    implementation ("com.google.android.gms:play-services-tasks:18.0.2")
+
 
     // Glide for image loading
     implementation("com.github.bumptech.glide:glide:4.16.0")
@@ -61,10 +64,6 @@ dependencies {
 
     // Country Code Picker
     implementation("com.hbb20:ccp:2.7.0")
-
-    // ✅ Retrofit for HTTP calls to Flask backend
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 
     // Testing
     testImplementation(libs.junit)

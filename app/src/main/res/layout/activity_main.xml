@@ -44,27 +44,30 @@
         android:layout_above="@id/bottomNv" />
 
     <!-- Bottom Navigation -->
+
+    <!-- Floating Action Button like in reference -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNv"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
+        android:layout_marginBottom="0dp"
         android:background="#FFFFFF"
-        app:menu="@menu/menu_bottom"
-        app:labelVisibilityMode="labeled"
+        android:elevation="10dp"
         app:itemIconTint="@color/nav_item_color"
         app:itemTextColor="@color/nav_item_color"
-        android:elevation="10dp" />
+        app:labelVisibilityMode="labeled"
+        app:menu="@menu/menu_bottom" />
 
-    <!-- Floating Action Button (centered above BottomNavigationView) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/uploadProject"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
-        android:layout_above="@id/bottomNv"
-        android:layout_marginBottom="2dp"
+        android:layout_marginBottom="40dp"
         android:src="@drawable/ic_add_white"
         app:backgroundTint="#03A9F4"
         android:contentDescription="Upload" />
+
 </RelativeLayout>

@@ -1,0 +1,406 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <!-- Toolbar -->
+    <RelativeLayout
+        android:id="@+id/toolbarRl"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:background="#03A9F4"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/toolbarBackBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:background="@android:color/transparent"
+            android:padding="10dp"
+            android:src="@drawable/ic_back_white"
+            android:tint="@android:color/white" />
+
+        <TextView
+            android:id="@+id/toolbarTitleTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Project Summary"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- Three-dot / overflow menu button in toolbar -->
+        <ImageButton
+            android:id="@+id/toolbarMenuBtns"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="8dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/icon_menu_white"
+            android:tint="@android:color/white"
+            android:contentDescription="More" />
+    </RelativeLayout>
+
+    <!-- Scrollable Table -->
+    <ScrollView
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:fillViewport="false"
+        android:padding="12dp"
+        android:background="#FFFFFF"
+        app:layout_constraintTop_toBottomOf="@id/toolbarRl"
+        app:layout_constraintBottom_toTopOf="@id/bottomButtonBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TableLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stretchColumns="1"
+            android:background="#FFFFFF"
+            android:padding="1dp">
+
+            <!-- NEW Row A: Uploaded by (value id: summaryUploadedByName) -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Uploaded by"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryUploadedByName"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- NEW Row B: Department (value id: summaryDepartment) -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Department"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryDepartment"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- NEW Row C: Phone number (value id: summaryPhone) -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Phone number"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryPhone"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- NEW Row D: Email (value id: summaryEmail) -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Email"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryEmail"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: Project Title -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Project Title"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: Project Type -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Project Type"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryType"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: Project Level -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Project Level"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryLevel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: Abstract -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Abstract"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryAbstract"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: Methodology -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Methodology"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryMethodology"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: Similarity -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Similarity"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summarySimilarity"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: AI Generated -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="AI Generated"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryAiGenerated"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:padding="8dp"
+                    android:textColor="#333333"
+                    android:gravity="top|start"
+                    android:background="@drawable/cell_border" />
+            </TableRow>
+
+            <!-- Row: Files -->
+            <TableRow>
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="Files"
+                    android:textStyle="bold"
+                    android:padding="8dp"
+                    android:textColor="#000000"
+                    android:gravity="center_vertical|start"
+                    android:background="@drawable/cell_border" />
+
+                <TextView
+                    android:id="@+id/summaryFiles"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:background="@drawable/cell_border"
+                    android:gravity="top|start"
+                    android:padding="8dp"
+                    android:textColor="#333333"/>
+            </TableRow>
+
+        </TableLayout>
+    </ScrollView>
+
+    <!-- Bottom fixed button bar (looks/stays like a toolbar) -->
+    <LinearLayout
+        android:id="@+id/bottomButtonBar"
+        android:layout_width="0dp"
+        android:layout_height="64dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:padding="6dp"
+        android:background="#FFFFFF"
+        android:elevation="6dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Call button -->
+        <ImageButton
+            android:id="@+id/btn_call"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_call_white"
+            android:contentDescription="Call"
+            android:scaleType="centerInside"
+            android:adjustViewBounds="true"
+            android:tint="#6E6E6E" />
+
+        <!-- SMS button -->
+        <ImageButton
+            android:id="@+id/btn_sms"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_sms_white"
+            android:contentDescription="SMS"
+            android:scaleType="centerInside"
+            android:adjustViewBounds="true"
+            android:tint="#6E6E6E" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

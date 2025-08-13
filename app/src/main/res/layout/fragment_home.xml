@@ -31,6 +31,19 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
+            <Button
+                android:id="@+id/button_my_projects"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Go to My Projects " />
+
+
+            <Button
+                android:id="@+id/button_all_projects"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Go to All Projects " />
+
 
             <!-- Add any home-related content here (no header needed) -->
 

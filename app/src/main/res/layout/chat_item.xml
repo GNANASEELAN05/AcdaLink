@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A simple card / row layout for each chat record -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="72dp"
+    android:padding="12dp"
+    android:background="@android:color/transparent">
+
+    <ImageView
+        android:id="@+id/ivChatIcon"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_centerVertical="true"
+        android:contentDescription="icon"
+        android:src="@android:drawable/sym_action_chat" />
+
+    <TextView
+        android:id="@+id/tvChatTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toEndOf="@id/ivChatIcon"
+        android:layout_marginStart="12dp"
+        android:text="To: Uploader Name"
+        android:textSize="16sp"
+        android:textColor="#000000"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/tvChatSub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/tvChatTitle"
+        android:layout_toEndOf="@id/ivChatIcon"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:text="via WhatsApp"
+        android:textSize="13sp"
+        android:textColor="#666666"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+</RelativeLayout>

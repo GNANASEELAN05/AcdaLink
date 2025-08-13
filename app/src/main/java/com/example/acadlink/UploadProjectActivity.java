@@ -102,6 +102,14 @@ public class UploadProjectActivity extends AppCompatActivity {
                 intent.putExtra("methodology", methodologyEt.getText().toString());
                 intent.putExtra("fileCount", selectedUris.size());
                 intent.putStringArrayListExtra("fileInfoList", selectedFileInfo);
+
+                // <-- NEW: also pass the exact URIs (as strings) in the same order as the fileInfo entries (excluding the primary-folder marker)
+                ArrayList<String> uriStrings = new ArrayList<>();
+                for (Uri u : selectedUris) {
+                    uriStrings.add(u.toString());
+                }
+                intent.putStringArrayListExtra("fileUriList", uriStrings);
+
                 startActivity(intent);
             }
         });
@@ -169,7 +177,9 @@ public class UploadProjectActivity extends AppCompatActivity {
             DocumentFile folder = DocumentFile.fromTreeUri(this, treeUri);
             if (folder != null && folder.isDirectory()) {
                 int count = 1;
-                addFileToList(folder.getUri(), 0); // primary folder
+                // show primary folder name in the file list UI (no addition to selectedUris here)
+                addFileToList(folder.getUri(), 0); // primary folder UI line
+
                 for (DocumentFile file : folder.listFiles()) {
                     if (file.isFile()) {
                         long size = file.length();
@@ -177,9 +187,10 @@ public class UploadProjectActivity extends AppCompatActivity {
                             hasOversized = true;
                             continue;
                         }
-                        selectedUris.add(file.getUri());
+                        Uri fileUri = file.getUri();
+                        selectedUris.add(fileUri); // <-- important: child file URIs are added here
                         totalSizeBytes += size;
-                        addFileToList(file.getUri(), count++);
+                        addFileToList(fileUri, count++);
                     }
                 }
             }
@@ -302,4 +313,4 @@ public class UploadProjectActivity extends AppCompatActivity {
         }
         return uri.getLastPathSegment();
     }
-} 
+}

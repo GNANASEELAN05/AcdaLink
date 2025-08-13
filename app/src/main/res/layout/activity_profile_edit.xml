@@ -76,6 +76,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:hintTextColor="#03A9F4"
+                app:boxStrokeColor="@color/black"
                 android:textColorHint="#6E6E6E"
                 android:layout_marginTop="16dp"
                 android:hint="Name"
@@ -98,6 +99,7 @@
                 android:layout_height="wrap_content"
                 app:hintTextColor="#03A9F4"
                 android:textColorHint="#6E6E6E"
+                app:boxStrokeColor="@color/black"
                 android:layout_marginTop="10dp"
                 android:hint="DOB (dd/MM/yyyy)"
                 app:startIconDrawable="@drawable/ic_calender_white"
@@ -118,6 +120,7 @@
                 android:layout_width="match_parent"
                 app:hintTextColor="#03A9F4"
                 android:textColorHint="#6E6E6E"
+                app:boxStrokeColor="@color/black"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:hint="Email"
@@ -140,6 +143,7 @@
                 android:layout_width="match_parent"
                 app:hintTextColor="#03A9F4"
                 android:textColorHint="#6E6E6E"
+                app:boxStrokeColor="@color/black"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:hint="Department"
@@ -160,6 +164,9 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Phone -->
+
+            <!-- Update Button -->
+
             <RelativeLayout
                 android:id="@+id/phoneInputRl"
                 android:layout_width="match_parent"
@@ -170,9 +177,9 @@
                     android:id="@+id/countryCodePicker"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minWidth="60dp"
                     android:layout_marginTop="5dp"
                     android:layout_marginEnd="10dp"
+                    android:minWidth="60dp"
                     app:ccp_autoDetectCountry="true"
                     app:ccp_rememberLastSelection="true"
                     app:ccp_showFlag="true"
@@ -183,10 +190,11 @@
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    app:hintTextColor="#03A9F4"
-                    android:textColorHint="#6E6E6E"
                     android:layout_toEndOf="@id/countryCodePicker"
                     android:hint="Phone Number"
+                    android:textColorHint="#6E6E6E"
+                    app:boxStrokeColor="@color/black"
+                    app:hintTextColor="#03A9F4"
                     app:startIconDrawable="@drawable/ic_call_white"
                     app:startIconTint="#6E6E6E">
 
@@ -199,7 +207,6 @@
                 </com.google.android.material.textfield.TextInputLayout>
             </RelativeLayout>
 
-            <!-- Update Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/updateBtn"
                 android:layout_width="match_parent"

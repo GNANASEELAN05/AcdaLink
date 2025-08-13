@@ -14,7 +14,7 @@
         android:title="Upload" />
     <item
         android:id="@+id/menu_my_fav"
-        android:icon="@drawable/ic_fav_white"
+        android:icon="@drawable/ic_bookmark"
         android:title="Bookmarks" />
     <item
         android:id="@+id/menu_account"

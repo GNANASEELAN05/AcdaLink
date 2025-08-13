@@ -17,6 +17,24 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
         <activity
+            android:name=".AllProjectSummaryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ItemAllProjectActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AllProjectsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MyProjectSummaryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ItemMyProjectActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MyProjects"
+            android:exported="false" />
+        <activity
             android:name=".ApiTestActivity"
             android:exported="false" />
         <activity

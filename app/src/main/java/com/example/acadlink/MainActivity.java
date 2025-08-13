@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
         } else if (id == R.id.menu_chats) {
             return handleProtectedSection(new ChatsFragment(), "Chats");
         } else if (id == R.id.menu_my_fav) {
-            return handleProtectedSection(new MyFavFragment(), "My Favorites");
+            return handleProtectedSection(new MyBookMarkFragment(), "My Favorites");
         } else if (id == R.id.menu_account) {
             return handleProtectedSection(new AccountFragment(), "Account");
         }

@@ -221,7 +221,8 @@ public class RegisterEmailActivity extends AppCompatActivity {
         userData.put("phoneNumber", phoneNumber);
         userData.put("dob", "");
         userData.put("department", department);
-        userData.put("profileImageUrl", "");
+        // store under the exact key the AccountFragment expects:
+        userData.put("profileImage", "");
         userData.put("userType", "Email");
         userData.put("typingTo", "");
         userData.put("timestamp", timestamp);

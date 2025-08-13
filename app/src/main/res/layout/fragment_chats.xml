@@ -13,15 +13,25 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- Add this TextView -->
+        <!-- Empty / placeholder message (kept for backward compatibility) -->
         <TextView
             android:id="@+id/sampleChatText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="This is a sample chat message"
+            android:text="No chats yet"
             android:textSize="16sp"
             android:textColor="#000000"
-            android:layout_gravity="center" />
+            android:layout_gravity="center"
+            android:layout_marginTop="24dp"
+            android:visibility="visible" />
+
+        <!-- RecyclerView that shows chat cards -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvChats"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible" />
+
     </FrameLayout>
 
 </RelativeLayout>
