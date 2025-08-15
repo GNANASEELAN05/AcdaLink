@@ -3,9 +3,7 @@ package com.example.acadlink;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -46,10 +44,10 @@ import java.util.Map;
 
 /**
  * AllProjectSummaryActivity
- * - robust WhatsApp detection + icon loading (regular/business/beta/any package containing "whatsapp")
- * - chooser spelling fixed to "WhatsApp"
- * - prevents calling/messaging yourself (per-user) on this screen
- * - preserves all IDs/behaviour
+ * - Modified: SMS button directly opens SMS to the uploader number (no chooser).
+ * - Modified: Call button now saves call record to chats (via = "call") before dialing.
+ * - Deleted: WhatsApp path / chooser removed (minimal changes only).
+ * - Other behavior preserved.
  */
 public class AllProjectSummaryActivity extends AppCompatActivity {
 
@@ -115,6 +113,7 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
 
         btnCall.setOnClickListener(v -> {
             String phone = phoneTv.getText().toString();
+            String name = uploadedByTv.getText().toString();
             if (phone == null || phone.trim().isEmpty() || phone.equalsIgnoreCase("N/A")) {
                 Toast.makeText(this, "Phone number not available", Toast.LENGTH_SHORT).show();
                 return;
@@ -123,12 +122,17 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
                 Toast.makeText(this, "You cannot call yourself", Toast.LENGTH_SHORT).show();
                 return;
             }
+
+            // === NEW: Save call record in chat history (via = "call") ===
+            saveChatRecord(name, phone, "call");
+
             String telUri = "tel:" + extractForTel(phone);
             Intent dialIntent = new Intent(Intent.ACTION_DIAL);
             dialIntent.setData(Uri.parse(telUri));
             startActivity(dialIntent);
         });
 
+        // === MODIFIED: SMS button now directly opens SMS to the specified number ===
         btnSms.setOnClickListener(v -> {
             String phone = phoneTv.getText().toString();
             String name = uploadedByTv.getText().toString();
@@ -140,7 +144,36 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
                 Toast.makeText(this, "You cannot message yourself", Toast.LENGTH_SHORT).show();
                 return;
             }
-            showMessagingChooser(phone, name);
+
+            // Save chat record as SMS
+            saveChatRecord(name, phone, "sms");
+
+            // Build and launch SMS intent (prefers default SMS app if available)
+            try {
+                Intent intent = new Intent(Intent.ACTION_SENDTO);
+                intent.setData(Uri.parse("smsto:" + Uri.encode(phone)));
+
+                String smsPackage = null;
+                try {
+                    smsPackage = Telephony.Sms.getDefaultSmsPackage(this);
+                } catch (Exception ignored) {
+                    smsPackage = null;
+                }
+
+                if (smsPackage == null) {
+                    Intent smsProbe = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:1234567890"));
+                    List<android.content.pm.ResolveInfo> smsHandlers = getPackageManager().queryIntentActivities(smsProbe, 0);
+                    if (smsHandlers != null && !smsHandlers.isEmpty()) {
+                        android.content.pm.ResolveInfo ri = smsHandlers.get(0);
+                        if (ri != null && ri.activityInfo != null) smsPackage = ri.activityInfo.packageName;
+                    }
+                }
+
+                if (smsPackage != null) intent.setPackage(smsPackage);
+                startActivity(intent);
+            } catch (Exception e) {
+                Toast.makeText(this, "No SMS app found", Toast.LENGTH_SHORT).show();
+            }
         });
 
         // read raw intent extras (fallback)
@@ -458,9 +491,7 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         });
     }
 
-    // --------------- Messaging chooser & improved WhatsApp handling ---------------
-
-    /** Safely load an icon for the provided package name. */
+    /** Safely load an icon for the provided package name. (Kept for future/compatibility) */
     private Drawable safeLoadIcon(PackageManager pm, String pkg) {
         if (pm == null || pkg == null) return null;
         try {
@@ -471,198 +502,6 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
             return pm.getApplicationIcon(pkg);
         } catch (Exception ignored) { }
         return null;
-    }
-
-    /**
-     * Find installed WhatsApp package. Checks preferred names first then scans installed packages,
-     * then tries to resolve wa.me handlers. Returns package name or null.
-     */
-    private String findInstalledWhatsAppPackage(PackageManager pm) {
-        if (pm == null) return null;
-
-        String[] preferred = new String[] {
-                "com.whatsapp",
-                "com.whatsapp.w4b",   // WhatsApp Business
-                "com.whatsapp.beta",
-                "com.whatsapp.android"
-        };
-
-        for (String p : preferred) {
-            try {
-                PackageInfo pi = pm.getPackageInfo(p, 0);
-                if (pi != null) return p;
-            } catch (Exception ignored) { }
-        }
-
-        // scan installed packages for any package name containing "whatsapp"
-        try {
-            List<PackageInfo> installed = pm.getInstalledPackages(0);
-            if (installed != null) {
-                for (PackageInfo pi : installed) {
-                    if (pi != null && pi.packageName != null &&
-                            pi.packageName.toLowerCase(Locale.ROOT).contains("whatsapp")) {
-                        return pi.packageName;
-                    }
-                }
-            }
-        } catch (Exception ignored) { }
-
-        // resolve wa.me handlers
-        try {
-            Intent test = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/1234567890"));
-            List<ResolveInfo> handlers = pm.queryIntentActivities(test, PackageManager.MATCH_DEFAULT_ONLY);
-            if (handlers != null && !handlers.isEmpty()) {
-                for (ResolveInfo ri : handlers) {
-                    if (ri != null && ri.activityInfo != null && ri.activityInfo.packageName != null) {
-                        String pkg = ri.activityInfo.packageName.toLowerCase(Locale.ROOT);
-                        if (pkg.contains("whatsapp")) return ri.activityInfo.packageName;
-                    }
-                }
-            }
-        } catch (Exception ignored) { }
-
-        return null;
-    }
-
-    private void showMessagingChooser(String phone, String uploaderName) {
-        try {
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle("Choose messaging app");
-
-            LinearLayout container = new LinearLayout(this);
-            container.setOrientation(LinearLayout.HORIZONTAL);
-            int pad = (int) (getResources().getDisplayMetrics().density * 16);
-            container.setPadding(pad, pad, pad, pad);
-            container.setGravity(Gravity.CENTER);
-
-            PackageManager pm = getPackageManager();
-
-            // SMS icon & package — guarded
-            Drawable smsIcon = null;
-            String smsPackage = null;
-            try {
-                try {
-                    smsPackage = Telephony.Sms.getDefaultSmsPackage(this);
-                } catch (Exception ignored) {
-                    smsPackage = null;
-                }
-
-                if (smsPackage == null) {
-                    Intent smsProbe = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:1234567890"));
-                    List<ResolveInfo> smsHandlers = pm.queryIntentActivities(smsProbe, 0);
-                    if (smsHandlers != null && !smsHandlers.isEmpty()) {
-                        ResolveInfo ri = smsHandlers.get(0);
-                        if (ri != null && ri.activityInfo != null) smsPackage = ri.activityInfo.packageName;
-                    }
-                }
-
-                if (smsPackage != null) smsIcon = safeLoadIcon(pm, smsPackage);
-            } catch (Exception ignored) { smsPackage = null; smsIcon = null; }
-
-            if (smsIcon == null) smsIcon = ContextCompat.getDrawable(this, android.R.drawable.sym_action_chat);
-
-            // WhatsApp detection & icon
-            String waPackage = findInstalledWhatsAppPackage(pm);
-            Drawable waIcon = null;
-            boolean waInstalled = waPackage != null;
-            if (waInstalled) {
-                waIcon = safeLoadIcon(pm, waPackage);
-                if (waIcon == null) waInstalled = false;
-            }
-            if (waIcon == null) waIcon = ContextCompat.getDrawable(this, android.R.drawable.sym_action_chat);
-
-            // Make final copies for lambdas
-            final Drawable finalSmsIcon = smsIcon;
-            final String finalSmsPackage = smsPackage;
-            final Drawable finalWaIcon = waIcon;
-            final boolean finalWaInstalled = waInstalled;
-            final String finalWaPackage = waPackage;
-
-            // SMS layout
-            LinearLayout smsLayout = new LinearLayout(this);
-            smsLayout.setOrientation(LinearLayout.VERTICAL);
-            smsLayout.setGravity(Gravity.CENTER);
-            ImageView smsIv = new ImageView(this);
-            int size = (int) (getResources().getDisplayMetrics().density * 56);
-            LinearLayout.LayoutParams ivParams = new LinearLayout.LayoutParams(size, size);
-            smsIv.setLayoutParams(ivParams);
-            smsIv.setImageDrawable(finalSmsIcon);
-            smsLayout.addView(smsIv);
-            TextView smsTv = new TextView(this);
-            smsTv.setText("SMS");
-            smsTv.setGravity(Gravity.CENTER);
-            smsLayout.addView(smsTv);
-
-            smsLayout.setOnClickListener(v -> {
-                saveChatRecord(uploaderName, phone, "sms");
-                try {
-                    Intent intent = new Intent(Intent.ACTION_SENDTO);
-                    intent.setData(Uri.parse("smsto:" + Uri.encode(phone)));
-                    if (finalSmsPackage != null) intent.setPackage(finalSmsPackage);
-                    startActivity(intent);
-                } catch (Exception e) {
-                    Toast.makeText(this, "No SMS app found", Toast.LENGTH_SHORT).show();
-                }
-            });
-
-            // WhatsApp layout
-            LinearLayout waLayout = new LinearLayout(this);
-            waLayout.setOrientation(LinearLayout.VERTICAL);
-            waLayout.setGravity(Gravity.CENTER);
-            ImageView waIv = new ImageView(this);
-            waIv.setLayoutParams(ivParams);
-            waIv.setImageDrawable(finalWaIcon);
-            waLayout.addView(waIv);
-            TextView waTv = new TextView(this);
-            waTv.setText("WhatsApp"); // exact label
-            waTv.setGravity(Gravity.CENTER);
-            waLayout.addView(waTv);
-
-            waLayout.setOnClickListener(v -> {
-                if (!finalWaInstalled) {
-                    Toast.makeText(this, "WhatsApp not installed", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                saveChatRecord(uploaderName, phone, "whatsapp");
-
-                String digits = extractDigits(phone);
-                if (digits.length() == 0) {
-                    Toast.makeText(this, "Invalid phone number for WhatsApp", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                String waUrl = "https://wa.me/" + digits;
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(waUrl));
-                    if (finalWaPackage != null) intent.setPackage(finalWaPackage);
-                    startActivity(intent);
-                } catch (Exception e) {
-                    try {
-                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(waUrl));
-                        startActivity(intent);
-                    } catch (Exception ex) {
-                        Toast.makeText(this, "Unable to open WhatsApp", Toast.LENGTH_SHORT).show();
-                    }
-                }
-            });
-
-            // Add spacing between icons
-            LinearLayout.LayoutParams childLp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT);
-            childLp.setMargins(pad / 2, 0, pad / 2, 0);
-
-            container.addView(smsLayout, childLp);
-            container.addView(waLayout, childLp);
-
-            builder.setView(container);
-            builder.setNegativeButton("Cancel", (d, w) -> d.dismiss());
-            AlertDialog dialog = builder.create();
-            dialog.show();
-
-        } catch (Exception e) {
-            Log.w(TAG, "showMessagingChooser error: " + e.getMessage());
-            Toast.makeText(this, "Could not open messaging options", Toast.LENGTH_SHORT).show();
-        }
     }
 
     /** Save a chat record (for Chats tab). */

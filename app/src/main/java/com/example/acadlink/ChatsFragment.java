@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
@@ -36,9 +35,9 @@ import java.util.Locale;
 
 /**
  * ChatsFragment: shows recent chat cards saved from AllProjectSummaryActivity.
- * - robust WhatsApp detection & icon loading
- * - safe Telephony usage for SMS icon/opener
- * (IDs/behaviour preserved)
+ * - Modified: Shows SMS and Call entries; skips WhatsApp entries.
+ * - Modified: Clicking a chat item opens SMS or Dialer depending on 'via'.
+ * - Other IDs/behaviour preserved.
  */
 public class ChatsFragment extends Fragment {
 
@@ -96,7 +95,14 @@ public class ChatsFragment extends Fragment {
                 String number = o.optString("number", "");
                 String via = o.optString("via", "");
                 long ts = o.optLong("ts", 0L);
-                items.add(new ChatItem(name, number, via, ts));
+
+                // Normalize blank/unknown -> sms (compatibility)
+                if (via == null || via.trim().isEmpty()) via = "sms";
+
+                // Skip WhatsApp entries
+                if (via != null && via.equalsIgnoreCase("whatsapp")) continue;
+
+                items.add(new ChatItem(name, number, via.toLowerCase(Locale.ROOT), ts));
             }
 
             Collections.sort(items, (a, b) -> Long.compare(b.ts, a.ts));
@@ -119,7 +125,7 @@ public class ChatsFragment extends Fragment {
     private static class ChatItem {
         String name;
         String number;
-        String via; // "sms" or "whatsapp"
+        String via; // "sms" or "call"
         long ts;
 
         ChatItem(String n, String num, String v, long t) {
@@ -155,28 +161,30 @@ public class ChatsFragment extends Fragment {
             ChatItem it = items.get(position);
             String displayTo = (it.name == null || it.name.trim().isEmpty()) ? it.number : it.name;
             holder.title.setText("To: " + displayTo);
-            String viaLabel = "via " + (("whatsapp".equalsIgnoreCase(it.via)) ? "WhatsApp" : "SMS");
+
+            // Show appropriate label
+            String viaLabel = it.via != null && it.via.equalsIgnoreCase("call") ? "via Call" : "via SMS";
             holder.subtitle.setText(viaLabel);
 
-            // icon loading (robust)
+            // icon loading (SMS or call)
             try {
                 PackageManager pm = ctx.getPackageManager();
-                if ("whatsapp".equalsIgnoreCase(it.via)) {
-                    String waPkg = findInstalledWhatsAppPackage(pm);
-                    Drawable icon = null;
-                    if (waPkg != null) icon = safeLoadIcon(pm, waPkg);
 
-                    if (icon == null) {
-                        ResolveInfo ri = pm.resolveActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/12345")), PackageManager.MATCH_DEFAULT_ONLY);
+                Drawable icon = null;
+                if (it.via != null && it.via.equalsIgnoreCase("call")) {
+                    // Attempt to load default dialer icon
+                    Intent dialProbe = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:123"));
+                    java.util.List<ResolveInfo> dialHandlers = pm.queryIntentActivities(dialProbe, 0);
+                    if (dialHandlers != null && !dialHandlers.isEmpty()) {
+                        ResolveInfo ri = dialHandlers.get(0);
                         if (ri != null && ri.activityInfo != null) {
-                            icon = safeLoadIcon(pm, ri.activityInfo.packageName);
+                            String pkg = ri.activityInfo.packageName;
+                            icon = safeLoadIcon(pm, pkg);
                         }
                     }
-
-                    if (icon != null) holder.icon.setImageDrawable(icon);
-                    else holder.icon.setImageDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat));
+                    if (icon == null) icon = ContextCompat.getDrawable(ctx, android.R.drawable.ic_menu_call);
                 } else {
-                    // SMS icon - guarded
+                    // SMS icon - guarded (prefer default sms app's icon)
                     String smsPkg = null;
                     try {
                         smsPkg = Telephony.Sms.getDefaultSmsPackage(ctx);
@@ -184,44 +192,38 @@ public class ChatsFragment extends Fragment {
 
                     if (smsPkg == null) {
                         Intent smsProbe = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:1234567890"));
-                        List<ResolveInfo> smsHandlers = pm.queryIntentActivities(smsProbe, 0);
+                        java.util.List<ResolveInfo> smsHandlers = pm.queryIntentActivities(smsProbe, 0);
                         if (smsHandlers != null && !smsHandlers.isEmpty()) {
                             ResolveInfo ri = smsHandlers.get(0);
                             if (ri != null && ri.activityInfo != null) smsPkg = ri.activityInfo.packageName;
                         }
                     }
 
-                    Drawable icon = null;
                     if (smsPkg != null) icon = safeLoadIcon(pm, smsPkg);
-                    if (icon != null) holder.icon.setImageDrawable(icon);
-                    else holder.icon.setImageDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat));
+                    if (icon == null) icon = ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat);
                 }
+
+                holder.icon.setImageDrawable(icon);
             } catch (Exception e) {
-                holder.icon.setImageDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat));
+                // fallback
+                if (it.via != null && it.via.equalsIgnoreCase("call"))
+                    holder.icon.setImageDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.ic_menu_call));
+                else
+                    holder.icon.setImageDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat));
             }
 
             holder.itemView.setOnClickListener(v -> {
-                if ("whatsapp".equalsIgnoreCase(it.via)) {
-                    String digits = extractDigitsStatic(it.number);
-                    if (digits.length() == 0) {
-                        Toast.makeText(ctx, "Invalid number for WhatsApp", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    String waUrl = "https://wa.me/" + digits;
+                // Open either SMS or Dialer depending on via
+                if (it.via != null && it.via.equalsIgnoreCase("call")) {
                     try {
-                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(waUrl));
-                        String waPkg = findInstalledWhatsAppPackage(ctx.getPackageManager());
-                        if (waPkg != null) intent.setPackage(waPkg);
-                        ctx.startActivity(intent);
+                        Intent dialIntent = new Intent(Intent.ACTION_DIAL);
+                        dialIntent.setData(Uri.parse("tel:" + Uri.encode(it.number)));
+                        ctx.startActivity(dialIntent);
                     } catch (Exception ex) {
-                        try {
-                            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(waUrl));
-                            ctx.startActivity(intent);
-                        } catch (Exception exc) {
-                            Toast.makeText(ctx, "Unable to open WhatsApp", Toast.LENGTH_SHORT).show();
-                        }
+                        Toast.makeText(ctx, "No dialer found", Toast.LENGTH_SHORT).show();
                     }
                 } else {
+                    // SMS
                     try {
                         Intent intent = new Intent(Intent.ACTION_SENDTO);
                         intent.setData(Uri.parse("smsto:" + Uri.encode(it.number)));
@@ -233,7 +235,7 @@ public class ChatsFragment extends Fragment {
 
                         if (smsPkg == null) {
                             Intent smsProbe = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:1234567890"));
-                            List<ResolveInfo> smsHandlers = ctx.getPackageManager().queryIntentActivities(smsProbe, 0);
+                            java.util.List<ResolveInfo> smsHandlers = ctx.getPackageManager().queryIntentActivities(smsProbe, 0);
                             if (smsHandlers != null && !smsHandlers.isEmpty()) {
                                 ResolveInfo ri = smsHandlers.get(0);
                                 if (ri != null && ri.activityInfo != null) smsPkg = ri.activityInfo.packageName;
@@ -274,53 +276,6 @@ public class ChatsFragment extends Fragment {
             try {
                 return pm.getApplicationIcon(pkg);
             } catch (Exception ignored) { }
-            return null;
-        }
-
-        private String findInstalledWhatsAppPackage(PackageManager pm) {
-            if (pm == null) return null;
-
-            String[] preferred = new String[] {
-                    "com.whatsapp",
-                    "com.whatsapp.w4b",
-                    "com.whatsapp.beta",
-                    "com.whatsapp.android"
-            };
-
-            for (String p : preferred) {
-                try {
-                    PackageInfo pi = pm.getPackageInfo(p, 0);
-                    if (pi != null) return p;
-                } catch (Exception ignored) { }
-            }
-
-            // scan installed packages for any package name containing "whatsapp"
-            try {
-                List<PackageInfo> installed = pm.getInstalledPackages(0);
-                if (installed != null) {
-                    for (PackageInfo pi : installed) {
-                        if (pi != null && pi.packageName != null &&
-                                pi.packageName.toLowerCase(Locale.ROOT).contains("whatsapp")) {
-                            return pi.packageName;
-                        }
-                    }
-                }
-            } catch (Exception ignored) { }
-
-            // fallback: resolve wa.me handlers
-            try {
-                Intent test = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/1234567890"));
-                List<ResolveInfo> handlers = pm.queryIntentActivities(test, PackageManager.MATCH_DEFAULT_ONLY);
-                if (handlers != null && !handlers.isEmpty()) {
-                    for (ResolveInfo ri : handlers) {
-                        if (ri != null && ri.activityInfo != null && ri.activityInfo.packageName != null) {
-                            String pkg = ri.activityInfo.packageName.toLowerCase(Locale.ROOT);
-                            if (pkg.contains("whatsapp")) return ri.activityInfo.packageName;
-                        }
-                    }
-                }
-            } catch (Exception ignored) { }
-
             return null;
         }
     }
