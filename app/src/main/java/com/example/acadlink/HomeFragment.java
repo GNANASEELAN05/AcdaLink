@@ -105,9 +105,13 @@ public class HomeFragment extends Fragment {
                     // ✅ Navigate to RequestToFacultyActivity
                     startActivity(new Intent(getActivity(), RequestToFacultyActivity.class));
                     return true;
-                } else if (title.equalsIgnoreCase("Request Received")
-                        || title.equalsIgnoreCase("Request Sent")) {
-                    Toast.makeText(getContext(), title, Toast.LENGTH_SHORT).show();
+                } else if (title.equalsIgnoreCase("Request Received")) {
+                    // ✅ Navigate to RequestReceivedActivity
+                    startActivity(new Intent(getActivity(), RequestReceivedActivity.class));
+                    return true;
+                } else if (title.equalsIgnoreCase("Request Sent")) {
+                    // ✅ Navigate to RequestSentActivity
+                    startActivity(new Intent(getActivity(), RequestSentActivity.class));
                     return true;
                 }
 

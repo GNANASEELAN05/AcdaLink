@@ -17,6 +17,12 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31" >
         <activity
+            android:name=".RequestSentActivity"
+            android:exported="false" />
+        <activity
+            android:name=".RequestReceivedActivity"
+            android:exported="false" />
+        <activity
             android:name=".RequestToFacultyActivity"
             android:exported="false" />
         <activity

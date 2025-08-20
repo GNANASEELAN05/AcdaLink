@@ -41,6 +41,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.HashMap;
 
 public class AllProjectSummaryActivity extends AppCompatActivity {
 
@@ -266,6 +267,18 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         return false;
     }
 
+    /**
+     * Modified requestDownload:
+     * - Builds a request object with requester and project/uploader info.
+     * - Writes the request both to:
+     *   - downloadRequests/<projectId>/<requesterUid>  (keeps prior behavior / compatibility)
+     *   - downloadRequestsReceived/<uploaderUid>/<projectId>/<requesterUid>
+     *   - downloadRequestsSent/<requesterUid>/<projectId>
+     *
+     * Status stored: "pending" initially. Accept/Reject updates status in both received & sent nodes.
+     *
+     * NOTE: This keeps all original ids/names intact and adds only the minimal writes required.
+     */
     private void requestDownload() {
         if (projectId == null || projectId.isEmpty()) {
             Toast.makeText(this, "Project ID missing.", Toast.LENGTH_SHORT).show();
@@ -275,14 +288,67 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
             Toast.makeText(this, "Please sign in to request.", Toast.LENGTH_SHORT).show();
             return;
         }
+
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
-        DatabaseReference ref = FirebaseDatabase.getInstance()
+        String requesterEmail = FirebaseAuth.getInstance().getCurrentUser().getEmail();
+        String displayName = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
+        String requesterName = firstNonEmpty(displayName, deriveNameFromEmail(requesterEmail), "Unknown");
+
+        String requesterPhone = currentPhoneDigits != null ? currentPhoneDigits : "";
+
+        // Resolve uploader info (best-effort)
+        String uploaderUid = uploaderUidResolved != null ? uploaderUidResolved : "unknown_uploader";
+        String uploaderName = safe(uploadedByTv != null ? uploadedByTv.getText() : null);
+        String projectTitle = firstNonEmpty(cachedProjectTitle, intentTitle, safe(titleTv != null ? titleTv.getText() : null), "N/A");
+
+        // build payload
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("requesterUid", uid);
+        payload.put("requesterName", requesterName);
+        payload.put("requesterEmail", requesterEmail != null ? requesterEmail : "");
+        payload.put("requesterPhone", requesterPhone);
+        payload.put("projectId", projectId);
+        payload.put("projectTitle", projectTitle);
+        payload.put("uploaderUid", uploaderUid);
+        payload.put("uploaderName", uploaderName);
+        payload.put("status", "pending");
+        payload.put("requestedAt", ServerValue.TIMESTAMP);
+
+        // 1) original compatibility location (project-scoped)
+        DatabaseReference compatRef = FirebaseDatabase.getInstance()
                 .getReference("downloadRequests")
                 .child(projectId)
                 .child(uid);
-        ref.child("requestedAt").setValue(ServerValue.TIMESTAMP)
-                .addOnSuccessListener(unused -> Toast.makeText(this, "Request sent", Toast.LENGTH_SHORT).show())
-                .addOnFailureListener(e -> Toast.makeText(this, "Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+
+        compatRef.setValue(payload)
+                .addOnFailureListener(e -> {
+                    // log only; continue to attempt inbox/sent writes
+                    Log.w(TAG, "compatRef write failed: " + e.getMessage());
+                });
+
+        // 2) received inbox for uploader
+        DatabaseReference inboxRef = FirebaseDatabase.getInstance()
+                .getReference("downloadRequestsReceived")
+                .child(uploaderUid)
+                .child(projectId)
+                .child(uid);
+
+        // 3) sent list for requester
+        DatabaseReference sentRef = FirebaseDatabase.getInstance()
+                .getReference("downloadRequestsSent")
+                .child(uid)
+                .child(projectId);
+
+        // write both (atomic-ish, but we write separately)
+        inboxRef.setValue(payload)
+                .addOnSuccessListener(unused -> {
+                    sentRef.setValue(payload)
+                            .addOnSuccessListener(u2 -> Toast.makeText(AllProjectSummaryActivity.this, "Request sent", Toast.LENGTH_SHORT).show())
+                            .addOnFailureListener(e -> Toast.makeText(AllProjectSummaryActivity.this, "Failed to save sent record: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(AllProjectSummaryActivity.this, "Failed to send request: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
     }
 
     // ========== Firebase fetch ==========
