@@ -401,6 +401,18 @@
             android:adjustViewBounds="true"
             android:tint="#6E6E6E" />
 
+        <ImageButton
+            android:id="@+id/btn_whatsapp"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_whatsapp"
+            android:contentDescription="WhatSapp"
+            android:scaleType="centerInside"
+            android:adjustViewBounds="true"
+            android:tint="#6E6E6E" />
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

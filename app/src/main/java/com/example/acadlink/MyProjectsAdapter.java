@@ -13,6 +13,9 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -124,8 +127,10 @@ public class MyProjectsAdapter extends RecyclerView.Adapter<MyProjectsAdapter.Vi
         if (holder.bookmarkIcon != null) {
             Context ctx = holder.itemView.getContext();
             SharedPreferences sp = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-            Set<String> stored = sp.getStringSet(PREFS_KEY_BOOKMARKS, new HashSet<>());
-            Set<String> bookmarks = new HashSet<>(stored);
+
+            String perUserKey = getPerUserBookmarksKey();
+            Set<String> stored = sp.getStringSet(perUserKey, new HashSet<>());
+            Set<String> bookmarks = new HashSet<>(stored != null ? stored : new HashSet<>());
 
             String projectId = model.getId();
             boolean isBookmarked = projectId != null && bookmarks.contains(projectId);
@@ -142,7 +147,8 @@ public class MyProjectsAdapter extends RecyclerView.Adapter<MyProjectsAdapter.Vi
             // Toggle bookmark
             holder.bookmarkIcon.setOnClickListener(v -> {
                 SharedPreferences.Editor editor = sp.edit();
-                Set<String> newSet = new HashSet<>(sp.getStringSet(PREFS_KEY_BOOKMARKS, new HashSet<>()));
+                Set<String> newSet = new HashSet<>(sp.getStringSet(perUserKey, new HashSet<>()));
+                if (newSet == null) newSet = new HashSet<>();
 
                 if (projectId == null) {
                     Toast.makeText(ctx, "Unable to bookmark this project", Toast.LENGTH_SHORT).show();
@@ -152,13 +158,13 @@ public class MyProjectsAdapter extends RecyclerView.Adapter<MyProjectsAdapter.Vi
                 if (newSet.contains(projectId)) {
                     // remove bookmark
                     newSet.remove(projectId);
-                    editor.putStringSet(PREFS_KEY_BOOKMARKS, newSet).apply();
+                    editor.putStringSet(perUserKey, newSet).apply();
                     holder.bookmarkIcon.setImageResource(R.drawable.ic_bookmark1);
                     Toast.makeText(ctx, "This project removed from bookmark", Toast.LENGTH_SHORT).show();
                 } else {
                     // add bookmark
                     newSet.add(projectId);
-                    editor.putStringSet(PREFS_KEY_BOOKMARKS, newSet).apply();
+                    editor.putStringSet(perUserKey, newSet).apply();
                     holder.bookmarkIcon.setImageResource(R.drawable.ic_bookmark_filled);
                     Toast.makeText(ctx, "This project added to bookmark", Toast.LENGTH_SHORT).show();
                 }
@@ -230,6 +236,19 @@ public class MyProjectsAdapter extends RecyclerView.Adapter<MyProjectsAdapter.Vi
     private static String normalizeKey(String s) {
         if (s == null) return "";
         return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
+    /**
+     * Compute per-user key for bookmarks.
+     * Format: PREFS_KEY_BOOKMARKS_{uid}  (uid = "guest" when not signed-in)
+     */
+    private String getPerUserBookmarksKey() {
+        String uid = "guest";
+        try {
+            FirebaseUser u = FirebaseAuth.getInstance() != null ? FirebaseAuth.getInstance().getCurrentUser() : null;
+            if (u != null && u.getUid() != null) uid = u.getUid();
+        } catch (Exception ignored) {}
+        return PREFS_KEY_BOOKMARKS + "_" + uid;
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {

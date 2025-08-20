@@ -43,7 +43,7 @@ public class AiCheckingActivity extends AppCompatActivity {
     Random random = new Random();
 
     // Customizable line count threshold for AI score adjustment
-    private static final int LINE_COUNT_THRESHOLD = 20; // lines threshold you want
+    private static final int LINE_COUNT_THRESHOLD = 15; // lines threshold you want
     private static final int CHARS_PER_LINE = 100; // Approximate characters per line
 
     // Customizable minimum AI score if above threshold

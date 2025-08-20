@@ -35,8 +35,8 @@ import java.util.Locale;
 
 /**
  * ChatsFragment: shows recent chat cards saved from AllProjectSummaryActivity.
- * - Modified: Shows SMS and Call entries; skips WhatsApp entries.
- * - Modified: Clicking a chat item opens SMS or Dialer depending on 'via'.
+ * - Modified: Shows SMS, Call and WhatsApp entries.
+ * - Modified: Clicking a chat item opens SMS, Dialer or WhatsApp depending on 'via'.
  * - Other IDs/behaviour preserved.
  */
 public class ChatsFragment extends Fragment {
@@ -99,10 +99,9 @@ public class ChatsFragment extends Fragment {
                 // Normalize blank/unknown -> sms (compatibility)
                 if (via == null || via.trim().isEmpty()) via = "sms";
 
-                // Skip WhatsApp entries
-                if (via != null && via.equalsIgnoreCase("whatsapp")) continue;
-
-                items.add(new ChatItem(name, number, via.toLowerCase(Locale.ROOT), ts));
+                // include WhatsApp entries as well (do NOT skip)
+                String viaNorm = via.toLowerCase(Locale.ROOT);
+                items.add(new ChatItem(name, number, viaNorm, ts));
             }
 
             Collections.sort(items, (a, b) -> Long.compare(b.ts, a.ts));
@@ -125,7 +124,7 @@ public class ChatsFragment extends Fragment {
     private static class ChatItem {
         String name;
         String number;
-        String via; // "sms" or "call"
+        String via; // "sms" or "call" or "whatsapp"
         long ts;
 
         ChatItem(String n, String num, String v, long t) {
@@ -163,10 +162,12 @@ public class ChatsFragment extends Fragment {
             holder.title.setText("To: " + displayTo);
 
             // Show appropriate label
-            String viaLabel = it.via != null && it.via.equalsIgnoreCase("call") ? "via Call" : "via SMS";
+            String viaLabel = "via SMS";
+            if ("call".equalsIgnoreCase(it.via)) viaLabel = "via Call";
+            else if ("whatsapp".equalsIgnoreCase(it.via)) viaLabel = "via WhatsApp";
             holder.subtitle.setText(viaLabel);
 
-            // icon loading (SMS or call)
+            // icon loading (SMS, call or WhatsApp)
             try {
                 PackageManager pm = ctx.getPackageManager();
 
@@ -183,8 +184,37 @@ public class ChatsFragment extends Fragment {
                         }
                     }
                     if (icon == null) icon = ContextCompat.getDrawable(ctx, android.R.drawable.ic_menu_call);
+                } else if (it.via != null && it.via.equalsIgnoreCase("whatsapp")) {
+                    // Improved WhatsApp icon resolution:
+                    // 1) Try to find an activity that can handle the whatsapp://send URI (preferred).
+                    // 2) If none, try known package names (standard & business).
+                    // 3) Fallback to generic chat drawable.
+                    try {
+                        Intent waProbe = new Intent(Intent.ACTION_VIEW, Uri.parse("whatsapp://send?phone=1234567890"));
+                        List<ResolveInfo> waHandlers = pm.queryIntentActivities(waProbe, 0);
+                        if (waHandlers != null && !waHandlers.isEmpty()) {
+                            ResolveInfo ri = waHandlers.get(0);
+                            if (ri != null && ri.activityInfo != null) {
+                                String pkg = ri.activityInfo.packageName;
+                                icon = safeLoadIcon(pm, pkg);
+                            }
+                        }
+                    } catch (Exception ignored) {}
+
+                    if (icon == null) {
+                        String[] waPkgs = new String[] {"com.whatsapp", "com.whatsapp.w4b"};
+                        for (String p : waPkgs) {
+                            try {
+                                pm.getPackageInfo(p, 0);
+                                icon = safeLoadIcon(pm, p);
+                                if (icon != null) break;
+                            } catch (Exception ignored) {}
+                        }
+                    }
+
+                    if (icon == null) icon = ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat);
                 } else {
-                    // SMS icon - guarded (prefer default sms app's icon)
+                    // SMS icon - prefer default sms app's icon
                     String smsPkg = null;
                     try {
                         smsPkg = Telephony.Sms.getDefaultSmsPackage(ctx);
@@ -213,7 +243,7 @@ public class ChatsFragment extends Fragment {
             }
 
             holder.itemView.setOnClickListener(v -> {
-                // Open either SMS or Dialer depending on via
+                // Open either SMS, Dialer or WhatsApp depending on via
                 if (it.via != null && it.via.equalsIgnoreCase("call")) {
                     try {
                         Intent dialIntent = new Intent(Intent.ACTION_DIAL);
@@ -221,6 +251,47 @@ public class ChatsFragment extends Fragment {
                         ctx.startActivity(dialIntent);
                     } catch (Exception ex) {
                         Toast.makeText(ctx, "No dialer found", Toast.LENGTH_SHORT).show();
+                    }
+                } else if (it.via != null && it.via.equalsIgnoreCase("whatsapp")) {
+                    // Try open in WhatsApp app (standard or business), else wa.me in browser
+                    String digits = extractDigitsStatic(it.number);
+                    if (digits.isEmpty()) {
+                        Toast.makeText(ctx, "Invalid phone number for WhatsApp", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    PackageManager pm = ctx.getPackageManager();
+                    String[] waPkgs = new String[] {"com.whatsapp", "com.whatsapp.w4b"};
+                    String waChosen = null;
+                    for (String p : waPkgs) {
+                        try {
+                            pm.getPackageInfo(p, 0);
+                            waChosen = p;
+                            break;
+                        } catch (Exception ignored) {}
+                    }
+
+                    try {
+                        if (waChosen != null) {
+                            // Use whatsapp URI with package to open directly in the app
+                            Intent waIntent = new Intent(Intent.ACTION_VIEW);
+                            waIntent.setPackage(waChosen);
+                            // whatsapp URI expects full number in international format without "+" as per wa.me
+                            waIntent.setData(Uri.parse("whatsapp://send?phone=" + digits));
+                            ctx.startActivity(waIntent);
+                        } else {
+                            // Fallback to web wa.me
+                            Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + digits));
+                            ctx.startActivity(web);
+                        }
+                    } catch (Exception ex) {
+                        // Last resort: try wa.me
+                        try {
+                            Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + digits));
+                            ctx.startActivity(web);
+                        } catch (Exception ex2) {
+                            Toast.makeText(ctx, "No WhatsApp/browser found", Toast.LENGTH_SHORT).show();
+                        }
                     }
                 } else {
                     // SMS

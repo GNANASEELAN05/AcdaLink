@@ -1,10 +1,10 @@
 package com.example.acadlink;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -18,6 +18,8 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -124,9 +126,17 @@ public class MyBookMarkFragment extends Fragment {
     }
 
     private void loadBookmarkedProjects() {
-        // read bookmarked IDs
+        // determine current user id (fallback to guest)
+        String uid = "guest";
+        try {
+            FirebaseUser u = FirebaseAuth.getInstance() != null ? FirebaseAuth.getInstance().getCurrentUser() : null;
+            if (u != null && u.getUid() != null) uid = u.getUid();
+        } catch (Exception ignored) {}
+
+        // read bookmarked IDs for this user
         SharedPreferences sp = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        Set<String> bookmarked = new HashSet<>(sp.getStringSet(PREFS_KEY_BOOKMARKS, new HashSet<>()));
+        String perUserKey = PREFS_KEY_BOOKMARKS + "_" + uid;
+        Set<String> bookmarked = new HashSet<>(sp.getStringSet(perUserKey, new HashSet<>()));
 
         if (bookmarked.isEmpty()) {
             // show empty view

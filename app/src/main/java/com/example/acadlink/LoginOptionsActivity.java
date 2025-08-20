@@ -35,7 +35,7 @@ public class LoginOptionsActivity extends AppCompatActivity {
             return;
         }
 
-        // Setup view
+        // Setup view binding
         binding = ActivityLoginOptionsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
@@ -50,7 +50,7 @@ public class LoginOptionsActivity extends AppCompatActivity {
         // Close app
         binding.closeBtn.setOnClickListener(v -> finishAffinity());
 
-        // Navigate to LoginEmailActivity
+        // Continue With Email button
         binding.loginEmailBtn.setOnClickListener(v -> {
             try {
                 Toast.makeText(this, "Opening Email Login...", Toast.LENGTH_SHORT).show();
@@ -60,6 +60,18 @@ public class LoginOptionsActivity extends AppCompatActivity {
                 Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 Log.e(TAG, "Failed to open LoginEmailActivity", e);
             }
-   });
-}
+        });
+
+        // Faculty Login button
+        binding.loginEmailBtn2.setOnClickListener(v -> {
+            try {
+                Toast.makeText(this, "Opening Faculty Login...", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(LoginOptionsActivity.this, FacultyLoginActivity.class);
+                startActivity(intent);
+            } catch (Exception e) {
+                Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                Log.e(TAG, "Failed to open Faculty LoginActivity", e);
+            }
+        });
+    }
 }

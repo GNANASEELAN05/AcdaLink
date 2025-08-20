@@ -1,26 +1,23 @@
 package com.example.acadlink;
 
+import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Telephony;
 import android.util.Log;
-import android.view.Gravity;
+import android.view.ContextThemeWrapper;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
+import androidx.appcompat.widget.PopupMenu;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -30,10 +27,13 @@ import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ServerValue;
 import com.google.firebase.database.ValueEventListener;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+
+import android.provider.Telephony; // <-- added
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -42,13 +42,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * AllProjectSummaryActivity
- * - Modified: SMS button directly opens SMS to the uploader number (no chooser).
- * - Modified: Call button now saves call record to chats (via = "call") before dialing.
- * - Deleted: WhatsApp path / chooser removed (minimal changes only).
- * - Other behavior preserved.
- */
 public class AllProjectSummaryActivity extends AppCompatActivity {
 
     private static final String TAG = "AllProjectSummary";
@@ -56,12 +49,12 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
     private TextView uploadedByTv, departmentTv, phoneTv, emailTv;
     private TextView titleTv, typeTv, levelTv, abstractTv, methodologyTv, similarityTv, aiGeneratedTv, filesTv;
 
-    // Intent / runtime fields (fallback)
+    // intent/runtime
     private String projectId;
     private String intentTitle, intentProjectType1, intentProjectLevel, intentAbstract, intentMethodology, intentSimilarity, intentAi;
     private List<String> intentFileInfoList;
 
-    // --- self-contact prevention context ---
+    // self-contact prevention
     private String uploaderUidResolved = null;
     private String uploaderEmailResolved = null;
     private String uploaderPhoneResolvedDigits = null;
@@ -69,6 +62,12 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
     private String currentUid = null;
     private String currentEmail = null;
     private String currentPhoneDigits = null;
+
+    // cache
+    private static final String PREFS_NAME = "proj_temp";
+
+    // cache title for primary-folder heuristics
+    private String cachedProjectTitle = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,8 +82,15 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         });
 
         ImageButton toolbarBackBtn = findViewById(R.id.toolbarBackBtn);
-        toolbarBackBtn.setOnClickListener(v -> finish());
+        if (toolbarBackBtn != null) toolbarBackBtn.setOnClickListener(v -> finish());
 
+        // toolbar 3-line menu
+        ImageButton menuBtn = findViewById(R.id.toolbarMenuBtns);
+        if (menuBtn != null) {
+            menuBtn.setOnClickListener(this::showOverflowMenu);
+        }
+
+        // bind UI
         titleTv = findViewById(R.id.summaryTitle);
         typeTv = findViewById(R.id.summaryType);
         levelTv = findViewById(R.id.summaryLevel);
@@ -94,89 +100,101 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         aiGeneratedTv = findViewById(R.id.summaryAiGenerated);
         filesTv = findViewById(R.id.summaryFiles);
 
-        // uploader fields
         uploadedByTv = findViewById(R.id.summaryUploadedByName);
         departmentTv = findViewById(R.id.summaryDepartment);
         phoneTv = findViewById(R.id.summaryPhone);
         emailTv = findViewById(R.id.summaryEmail);
 
-        // Capture current user (for self-check)
+        // self info
         if (FirebaseAuth.getInstance() != null && FirebaseAuth.getInstance().getCurrentUser() != null) {
             currentUid = FirebaseAuth.getInstance().getCurrentUser().getUid();
             currentEmail = FirebaseAuth.getInstance().getCurrentUser().getEmail();
-            loadCurrentUserProfilePhone(); // sets currentPhoneDigits (best-effort)
+            loadCurrentUserProfilePhone(); // sets currentPhoneDigits
         }
 
-        // Bottom buttons
         ImageButton btnCall = findViewById(R.id.btn_call);
         ImageButton btnSms = findViewById(R.id.btn_sms);
+        ImageButton btnWhatsapp = findViewById(R.id.btn_whatsapp);
 
-        btnCall.setOnClickListener(v -> {
-            String phone = phoneTv.getText().toString();
-            String name = uploadedByTv.getText().toString();
-            if (phone == null || phone.trim().isEmpty() || phone.equalsIgnoreCase("N/A")) {
-                Toast.makeText(this, "Phone number not available", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (isSelfAttempt(phone)) {
-                Toast.makeText(this, "You cannot call yourself", Toast.LENGTH_SHORT).show();
-                return;
-            }
+        if (btnCall != null) {
+            btnCall.setOnClickListener(v -> {
+                String phone = safe(phoneTv.getText());
+                String name = safe(uploadedByTv.getText());
+                if (phone.isEmpty() || phone.equalsIgnoreCase("N/A")) {
+                    Toast.makeText(this, "Phone number not available", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (isSelfAttempt(phone)) {
+                    Toast.makeText(this, "You cannot call yourself", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                saveChatRecord(name, phone, "call");
+                Intent dial = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + extractForTel(phone)));
+                startActivity(dial);
+            });
+        }
 
-            // === NEW: Save call record in chat history (via = "call") ===
-            saveChatRecord(name, phone, "call");
+        if (btnSms != null) {
+            btnSms.setOnClickListener(v -> {
+                String phone = safe(phoneTv.getText());
+                String name = safe(uploadedByTv.getText());
+                if (phone.isEmpty() || phone.equalsIgnoreCase("N/A")) {
+                    Toast.makeText(this, "Phone number not available", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (isSelfAttempt(phone)) {
+                    Toast.makeText(this, "You cannot message yourself", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                // store message history (deduped)
+                saveChatRecord(name, phone, "sms");
 
-            String telUri = "tel:" + extractForTel(phone);
-            Intent dialIntent = new Intent(Intent.ACTION_DIAL);
-            dialIntent.setData(Uri.parse(telUri));
-            startActivity(dialIntent);
-        });
-
-        // === MODIFIED: SMS button now directly opens SMS to the specified number ===
-        btnSms.setOnClickListener(v -> {
-            String phone = phoneTv.getText().toString();
-            String name = uploadedByTv.getText().toString();
-            if (phone == null || phone.trim().isEmpty() || phone.equalsIgnoreCase("N/A")) {
-                Toast.makeText(this, "Phone number not available", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (isSelfAttempt(phone)) {
-                Toast.makeText(this, "You cannot message yourself", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // Save chat record as SMS
-            saveChatRecord(name, phone, "sms");
-
-            // Build and launch SMS intent (prefers default SMS app if available)
-            try {
-                Intent intent = new Intent(Intent.ACTION_SENDTO);
-                intent.setData(Uri.parse("smsto:" + Uri.encode(phone)));
-
-                String smsPackage = null;
+                // --- OPEN DEFAULT SMS APP DIRECTLY (no chooser) ---
+                String to = extractForTel(phone);
+                Intent sms = new Intent(Intent.ACTION_SENDTO);
+                sms.setData(Uri.parse("smsto:" + to));
+                String defaultSmsPkg = Telephony.Sms.getDefaultSmsPackage(this);
+                if (defaultSmsPkg != null) {
+                    sms.setPackage(defaultSmsPkg);
+                }
                 try {
-                    smsPackage = Telephony.Sms.getDefaultSmsPackage(this);
-                } catch (Exception ignored) {
-                    smsPackage = null;
+                    startActivity(sms);
+                } catch (Exception e) {
+                    // fallback (rare: no default set). Still restrict to SMS handlers.
+                    Intent fallback = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + to));
+                    startActivity(fallback);
                 }
+            });
+        }
 
-                if (smsPackage == null) {
-                    Intent smsProbe = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:1234567890"));
-                    List<android.content.pm.ResolveInfo> smsHandlers = getPackageManager().queryIntentActivities(smsProbe, 0);
-                    if (smsHandlers != null && !smsHandlers.isEmpty()) {
-                        android.content.pm.ResolveInfo ri = smsHandlers.get(0);
-                        if (ri != null && ri.activityInfo != null) smsPackage = ri.activityInfo.packageName;
-                    }
+        if (btnWhatsapp != null) {
+            btnWhatsapp.setOnClickListener(v -> {
+                String phone = safe(phoneTv.getText());
+                String name = safe(uploadedByTv.getText());
+                if (phone.isEmpty() || phone.equalsIgnoreCase("N/A")) {
+                    Toast.makeText(this, "Phone number not available", Toast.LENGTH_SHORT).show();
+                    return;
                 }
+                if (isSelfAttempt(phone)) {
+                    Toast.makeText(this, "You cannot message yourself", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                // store whatsapp history (deduped)
+                saveChatRecord(name, phone, "whatsapp");
 
-                if (smsPackage != null) intent.setPackage(smsPackage);
-                startActivity(intent);
-            } catch (Exception e) {
-                Toast.makeText(this, "No SMS app found", Toast.LENGTH_SHORT).show();
-            }
-        });
+                String to = extractForTel(phone);
+                try {
+                    Intent i = new Intent(Intent.ACTION_VIEW);
+                    i.setData(Uri.parse("whatsapp://send?phone=" + to));
+                    startActivity(i);
+                } catch (Exception e) {
+                    Intent i2 = new Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/" + to));
+                    startActivity(i2);
+                }
+            });
+        }
 
-        // read raw intent extras (fallback)
+        // read intent extras
         Intent it = getIntent();
         projectId = safeTrim(it.getStringExtra("projectId"));
 
@@ -189,10 +207,14 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         intentAi = safeTrim(it.getStringExtra("aiGenerated"));
         intentFileInfoList = it.getStringArrayListExtra("fileInfoList");
 
+        // FAST: load cache first
+        loadFromPrefsAndPopulate(projectId);
+
+        // then network
         if (projectId != null && !projectId.isEmpty()) {
             fetchFromFirebase(projectId);
         } else {
-            // fallback to intent values
+            // fall back to intent-only
             populateUI(
                     firstNonEmpty(intentTitle, "N/A"),
                     firstNonEmpty(intentProjectType1, "N/A"),
@@ -203,425 +225,592 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
                     firstNonEmpty(intentAi, "N/A"),
                     null
             );
-            uploadedByTv.setText(safe(it.getStringExtra("uploadedBy")));
-            departmentTv.setText(safe(it.getStringExtra("uploaderDepartment")));
-            phoneTv.setText(safe(it.getStringExtra("uploaderPhone")));
-            emailTv.setText(safe(it.getStringExtra("uploaderEmail")));
 
-            // also store for self-check best-effort
-            uploaderEmailResolved = safeTrim(it.getStringExtra("uploaderEmail"));
+            // name fallback with regno-skip + email-derive
+            String rawName = firstNonEmpty(it.getStringExtra("uploadedBy"),
+                    it.getStringExtra("uploaderName"),
+                    it.getStringExtra("ownerName"),
+                    it.getStringExtra("userName"));
+            String email = firstNonEmpty(it.getStringExtra("uploaderEmail"), it.getStringExtra("email"));
+            String bestName = bestHumanName(
+                    rawName,
+                    deriveNameFromEmail(email)
+            );
+            uploadedByTv.setText(firstNonEmpty(bestName, "N/A"));
+
+            departmentTv.setText(firstNonEmpty(it.getStringExtra("uploaderDepartment"), "N/A"));
+            phoneTv.setText(firstNonEmpty(it.getStringExtra("uploaderPhone"), "N/A"));
+            emailTv.setText(firstNonEmpty(email, "N/A"));
+
+            uploaderEmailResolved = safeTrim(email);
             uploaderPhoneResolvedDigits = extractDigits(safe(it.getStringExtra("uploaderPhone")));
         }
     }
 
-    /** load logged-in user's phone from Realtime DB: Users/<uid> */
-    private void loadCurrentUserProfilePhone() {
-        try {
-            if (currentUid == null) return;
-            DatabaseReference meRef = FirebaseDatabase.getInstance()
-                    .getReference("Users")
-                    .child(currentUid);
-            meRef.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override public void onDataChange(DataSnapshot snapshot) {
-                    try {
-                        String code = String.valueOf(snapshot.child("phoneCode").getValue());
-                        String num  = String.valueOf(snapshot.child("phoneNumber").getValue());
-                        String merged = ((code != null && !code.trim().isEmpty()) ? code + " " : "") + (num == null ? "" : num);
-                        currentPhoneDigits = extractDigits(merged);
-                    } catch (Exception ignored) {}
-                }
-                @Override public void onCancelled(DatabaseError error) { /* ignore */ }
-            });
-        } catch (Exception ignored) {}
+    // ========== Overflow menu (black bg + white text through DarkPopupMenu) ==========
+    private void showOverflowMenu(View anchor) {
+        ContextThemeWrapper wrapper = new ContextThemeWrapper(this, R.style.DarkPopupMenu);
+        PopupMenu popup = new PopupMenu(wrapper, anchor);
+        MenuInflater inflater = popup.getMenuInflater();
+        inflater.inflate(R.menu.menu_all_project_summary, popup.getMenu());
+        popup.setOnMenuItemClickListener(this::onOverflowItemSelected);
+        popup.show();
     }
 
-    // --------------- Firebase fetch & resolution ---------------
-    private void fetchFromFirebase(String id) {
-        DatabaseReference projRef = FirebaseDatabase.getInstance().getReference("projects").child(id);
-        projRef.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot snapshot) {
-                try {
-                    if (snapshot != null && snapshot.exists()) {
-                        String title = findStringInSnapshot(snapshot, "projectTitle", "title", "name");
-                        String type1 = findStringInSnapshot(snapshot, "projectType1", "projectType", "type");
-                        String level = findStringInSnapshot(snapshot, "projectType2", "projectLevel", "level");
-                        String abs = findStringInSnapshot(snapshot, "abstract", "Abstract", "abstractText", "projectAbstract");
-                        String meth = findStringInSnapshot(snapshot, "methodology", "method", "methods");
-                        String sim = findStringInSnapshot(snapshot, "similarity", "similarityPercent");
-                        String ai = findStringInSnapshot(snapshot, "aiGenerated", "ai", "aiDetected");
-
-                        List<Map<String, Object>> filesList = null;
-                        if (snapshot.hasChild("files")) {
-                            Object fobj = snapshot.child("files").getValue();
-                            if (fobj instanceof List) {
-                                @SuppressWarnings("unchecked")
-                                List<Map<String, Object>> fl = (List<Map<String, Object>>) fobj;
-                                filesList = fl;
-                            } else if (fobj instanceof Map) {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> m = (Map<String, Object>) fobj;
-                                List<Map<String, Object>> fl = new ArrayList<>();
-                                for (Object v : m.values()) {
-                                    if (v instanceof Map) {
-                                        @SuppressWarnings("unchecked")
-                                        Map<String, Object> mm = (Map<String, Object>) v;
-                                        fl.add(mm);
-                                    }
-                                }
-                                if (!fl.isEmpty()) filesList = fl;
-                            }
-                        } else {
-                            Object topVal = snapshot.getValue();
-                            if (topVal instanceof Map) {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> m = (Map<String, Object>) topVal;
-                                Object candidate = findObjectInMapByKeyNames(m, new String[]{"files", "file", "attachments"});
-                                if (candidate instanceof List) {
-                                    @SuppressWarnings("unchecked")
-                                    List<Map<String, Object>> fl = (List<Map<String, Object>>) candidate;
-                                    filesList = fl;
-                                }
-                            }
-                        }
-
-                        String finalTitle = firstNonEmpty(title, intentTitle, "N/A");
-                        String finalType = firstNonEmpty(type1, intentProjectType1, "N/A");
-                        String finalLevel = firstNonEmpty(level, intentProjectLevel, "N/A");
-                        String finalAbstract = firstNonEmpty(abs, intentAbstract, "N/A");
-                        String finalMethod = firstNonEmpty(meth, intentMethodology, "N/A");
-                        String finalSim = firstNonEmpty(sim, intentSimilarity, "N/A");
-                        String finalAi = firstNonEmpty(ai, intentAi, "N/A");
-
-                        populateUI(finalTitle, finalType, finalLevel, finalAbstract, finalMethod, finalSim, finalAi, filesList);
-
-                        // Now resolve uploader info (best-effort) + store for self-check.
-                        resolveAndPopulateUploader(snapshot);
-                        return;
-                    }
-
-                    // no snapshot -> fallback to intent
-                    populateUI(
-                            firstNonEmpty(intentTitle, "N/A"),
-                            firstNonEmpty(intentProjectType1, "N/A"),
-                            firstNonEmpty(intentProjectLevel, "N/A"),
-                            firstNonEmpty(intentAbstract, "N/A"),
-                            firstNonEmpty(intentMethodology, "N/A"),
-                            firstNonEmpty(intentSimilarity, "N/A"),
-                            firstNonEmpty(intentAi, "N/A"),
-                            null
-                    );
-
-                } catch (Exception e) {
-                    Log.e(TAG, "Error reading Firebase snapshot: " + e.getMessage());
-                    // fallback
-                    populateUI(
-                            firstNonEmpty(intentTitle, "N/A"),
-                            firstNonEmpty(intentProjectType1, "N/A"),
-                            firstNonEmpty(intentProjectLevel, "N/A"),
-                            firstNonEmpty(intentAbstract, "N/A"),
-                            firstNonEmpty(intentMethodology, "N/A"),
-                            firstNonEmpty(intentSimilarity, "N/A"),
-                            firstNonEmpty(intentAi, "N/A"),
-                            null
-                    );
-                }
-            }
-
-            @Override
-            public void onCancelled(DatabaseError error) {
-                Log.e(TAG, "Firebase read cancelled: " + error.getMessage());
-                populateUI(
-                        firstNonEmpty(intentTitle, "N/A"),
-                        firstNonEmpty(intentProjectType1, "N/A"),
-                        firstNonEmpty(intentProjectLevel, "N/A"),
-                        firstNonEmpty(intentAbstract, "N/A"),
-                        firstNonEmpty(intentMethodology, "N/A"),
-                        firstNonEmpty(intentSimilarity, "N/A"),
-                        firstNonEmpty(intentAi, "N/A"),
-                        null
-                );
-            }
-        });
-    }
-
-    private void resolveAndPopulateUploader(DataSnapshot projectSnap) {
-        try {
-            String[] candidateKeys = new String[]{
-                    "uploaderId", "uid", "userId", "uploadedBy", "ownerId", "authorUid", "author", "uploader", "createdBy", "uploadedByUid"
-            };
-
-            String uploaderCandidate = findStringInSnapshot(projectSnap, candidateKeys);
-
-            if (uploaderCandidate != null && !uploaderCandidate.trim().isEmpty()) {
-                if (uploaderCandidate.contains("@")) {
-                    // uploader stored as email in project
-                    String name = findStringInSnapshot(projectSnap, "uploadedByName", "uploaderName", "uploadedBy", "author", "name");
-                    uploadedByTv.setText(notEmptyOrDefault(name, uploaderCandidate));
-                    emailTv.setText(uploaderCandidate);
-                    String phone = findStringInSnapshot(projectSnap, "phone", "phoneNumber", "uploaderPhone");
-                    phoneTv.setText(safe(phone));
-                    String dept = findStringInSnapshot(projectSnap, "department", "uploaderDepartment");
-                    departmentTv.setText(safe(dept));
-
-                    uploaderUidResolved = null;
-                    uploaderEmailResolved = uploaderCandidate;
-                    uploaderPhoneResolvedDigits = extractDigits(phone);
-                    return;
-                }
-
-                // uploader stored as UID — fetch profile
-                DatabaseReference userRef = FirebaseDatabase.getInstance().getReference("Users").child(uploaderCandidate);
-                userRef.addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(DataSnapshot userSnap) {
-                        if (userSnap != null && userSnap.exists()) {
-                            String uname = String.valueOf(userSnap.child("name").getValue());
-                            String uemail = String.valueOf(userSnap.child("email").getValue());
-                            String phoneCode = String.valueOf(userSnap.child("phoneCode").getValue());
-                            String phoneNumber = String.valueOf(userSnap.child("phoneNumber").getValue());
-                            String dept = String.valueOf(userSnap.child("department").getValue());
-
-                            String phoneCombined = (phoneCode != null && !phoneCode.trim().isEmpty()) ?
-                                    (phoneCode + " " + phoneNumber).trim() : safe(phoneNumber);
-
-                            uploadedByTv.setText(safe(uname));
-                            emailTv.setText(safe(uemail));
-                            phoneTv.setText(safe(phoneCombined));
-                            departmentTv.setText(safe(dept));
-
-                            // store for self-check
-                            uploaderUidResolved = uploaderCandidate;
-                            uploaderEmailResolved = uemail;
-                            uploaderPhoneResolvedDigits = extractDigits(phoneCombined);
-                        } else {
-                            String name = findStringInSnapshot(projectSnap, "uploadedByName", "uploaderName", "uploadedBy", "author", "name");
-                            String email = findStringInSnapshot(projectSnap, "uploaderEmail", "uploadedByEmail", "email", "userEmail");
-                            String phone = findStringInSnapshot(projectSnap, "phone", "phoneNumber", "uploaderPhone");
-                            String dept = findStringInSnapshot(projectSnap, "department", "uploaderDepartment");
-                            uploadedByTv.setText(safe(name));
-                            emailTv.setText(safe(email));
-                            phoneTv.setText(safe(phone));
-                            departmentTv.setText(safe(dept));
-
-                            uploaderUidResolved = uploaderCandidate;
-                            uploaderEmailResolved = email;
-                            uploaderPhoneResolvedDigits = extractDigits(phone);
-                        }
-                    }
-
-                    @Override
-                    public void onCancelled(DatabaseError error) {
-                        Log.w(TAG, "Failed to load uploader profile: " + error.getMessage());
-                        String name = findStringInSnapshot(projectSnap, "uploadedByName", "uploaderName", "uploadedBy", "author", "name");
-                        String email = findStringInSnapshot(projectSnap, "uploaderEmail", "uploadedByEmail", "email", "userEmail");
-                        String phone = findStringInSnapshot(projectSnap, "phone", "phoneNumber", "uploaderPhone");
-                        String dept = findStringInSnapshot(projectSnap, "department", "uploaderDepartment");
-                        uploadedByTv.setText(safe(name));
-                        emailTv.setText(safe(email));
-                        phoneTv.setText(safe(phone));
-                        departmentTv.setText(safe(dept));
-
-                        uploaderUidResolved = uploaderCandidate;
-                        uploaderEmailResolved = email;
-                        uploaderPhoneResolvedDigits = extractDigits(phone);
-                    }
-                });
-                return;
-            }
-
-            // No uploader field; pull best we can & store
-            String name = findStringInSnapshot(projectSnap, "uploadedByName", "uploaderName", "uploadedBy", "author", "name");
-            String email = findStringInSnapshot(projectSnap, "uploaderEmail", "uploadedByEmail", "email", "userEmail");
-            String phone = findStringInSnapshot(projectSnap, "phone", "phoneNumber", "uploaderPhone");
-            String dept = findStringInSnapshot(projectSnap, "department", "uploaderDepartment");
-
-            uploadedByTv.setText(safe(name));
-            emailTv.setText(safe(email));
-            phoneTv.setText(safe(phone));
-            departmentTv.setText(safe(dept));
-
-            uploaderUidResolved = null;
-            uploaderEmailResolved = email;
-            uploaderPhoneResolvedDigits = extractDigits(phone);
-
-        } catch (Exception e) {
-            Log.w(TAG, "resolveAndPopulateUploader error: " + e.getMessage());
-            uploadedByTv.setText("N/A");
-            departmentTv.setText("N/A");
-            phoneTv.setText("N/A");
-            emailTv.setText("N/A");
-
-            uploaderUidResolved = null;
-            uploaderEmailResolved = null;
-            uploaderPhoneResolvedDigits = null;
-        }
-    }
-
-    // --------------- Populate UI ---------------
-    private void populateUI(String title, String type, String level, String abs, String meth, String sim, String ai, List<Map<String, Object>> filesList) {
-        runOnUiThread(() -> {
-            titleTv.setText(notEmptyOrDefault(title, "N/A"));
-            typeTv.setText(notEmptyOrDefault(type, "N/A"));
-            levelTv.setText(notEmptyOrDefault(level, "N/A"));
-            abstractTv.setText(notEmptyOrDefault(abs, "N/A"));
-            methodologyTv.setText(notEmptyOrDefault(meth, "N/A"));
-            similarityTv.setText(notEmptyOrDefault(sim, "N/A"));
-            aiGeneratedTv.setText(notEmptyOrDefault(ai, "N/A"));
-
-            if (filesList != null && !filesList.isEmpty()) {
-                StringBuilder sb = new StringBuilder();
-                int c = 1;
-                for (Map<String, Object> f : filesList) {
-                    String name = String.valueOf(f.getOrDefault("name", "unknown"));
-                    String size = String.valueOf(f.getOrDefault("size", "N/A"));
-
-                    if (name.toLowerCase(Locale.ROOT).startsWith("primary folder")) {
-                        sb.append(name).append("\n");
-                    } else {
-                        sb.append(c++).append(". ").append(name).append(" (").append(size).append(")\n");
-                    }
-                }
-                filesTv.setText(sb.toString().trim());
-            } else if (intentFileInfoList != null && !intentFileInfoList.isEmpty()) {
-                filesTv.setText(formatFileInfoList(intentFileInfoList));
-            } else {
-                filesTv.setText("No files");
-            }
-        });
-    }
-
-    /** Safely load an icon for the provided package name. (Kept for future/compatibility) */
-    private Drawable safeLoadIcon(PackageManager pm, String pkg) {
-        if (pm == null || pkg == null) return null;
-        try {
-            ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
-            if (ai != null) return ai.loadIcon(pm);
-        } catch (Exception ignored) { }
-        try {
-            return pm.getApplicationIcon(pkg);
-        } catch (Exception ignored) { }
-        return null;
-    }
-
-    /** Save a chat record (for Chats tab). */
-    private void saveChatRecord(String name, String number, String via) {
-        try {
-            String uid = "guest";
-            if (FirebaseAuth.getInstance() != null && FirebaseAuth.getInstance().getCurrentUser() != null) {
-                uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
-            }
-
-            SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
-            String key = "chats_" + uid;
-            String raw = prefs.getString(key, "[]");
-            JSONArray old = new JSONArray(raw);
-
-            JSONArray updated = new JSONArray();
-            JSONObject newObj = new JSONObject();
-            newObj.put("name", name == null ? "" : name);
-            newObj.put("number", number == null ? "" : number);
-            newObj.put("via", via == null ? "" : via);
-            newObj.put("ts", System.currentTimeMillis());
-            updated.put(newObj);
-
-            // copy old, skipping duplicate number+via
-            for (int i = 0; i < old.length(); i++) {
-                JSONObject o = old.optJSONObject(i);
-                if (o == null) continue;
-                String onum = o.optString("number", "");
-                String ov = o.optString("via", "");
-                if (onum.equals(number) && ov.equals(via)) continue;
-                updated.put(o);
-            }
-
-            prefs.edit().putString(key, updated.toString()).apply();
-        } catch (Exception e) {
-            Log.w(TAG, "saveChatRecord error: " + e.getMessage());
-        }
-    }
-
-    // -------- Self-contact prevention helper --------
-    private boolean isSelfAttempt(String phoneText) {
-        String digits = extractDigits(phoneText);
-
-        // 1) If uploader UID matches current UID → self
-        if (currentUid != null && uploaderUidResolved != null && currentUid.equals(uploaderUidResolved)) {
+    private boolean onOverflowItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_request_download) {
+            requestDownload();
             return true;
-        }
-        // 2) If emails match → self
-        if (currentEmail != null && uploaderEmailResolved != null
-                && currentEmail.trim().equalsIgnoreCase(uploaderEmailResolved.trim())) {
-            return true;
-        }
-        // 3) If phone digits match → self
-        if (currentPhoneDigits != null && digits != null && digits.length() > 0
-                && digits.equals(currentPhoneDigits)) {
-            return true;
-        }
-        // 4) Also compare against whatever digits we could resolve for uploader
-        if (uploaderPhoneResolvedDigits != null && digits != null && digits.length() > 0
-                && digits.equals(uploaderPhoneResolvedDigits)) {
-            // if uploader digits == displayed digits, and we already checked current user above,
-            // this doesn't change result, but keeps logic tidy
         }
         return false;
     }
 
-    // --------------- Utilities ---------------
-    private static String notNull(String s) { return s == null ? "" : s; }
-
-    private static String safeTrim(String s) {
-        if (s == null) return null;
-        String t = s.trim();
-        return t.isEmpty() ? null : t;
+    private void requestDownload() {
+        if (projectId == null || projectId.isEmpty()) {
+            Toast.makeText(this, "Project ID missing.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (FirebaseAuth.getInstance().getCurrentUser() == null) {
+            Toast.makeText(this, "Please sign in to request.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        DatabaseReference ref = FirebaseDatabase.getInstance()
+                .getReference("downloadRequests")
+                .child(projectId)
+                .child(uid);
+        ref.child("requestedAt").setValue(ServerValue.TIMESTAMP)
+                .addOnSuccessListener(unused -> Toast.makeText(this, "Request sent", Toast.LENGTH_SHORT).show())
+                .addOnFailureListener(e -> Toast.makeText(this, "Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 
-    private static String firstNonEmpty(String... vals) {
-        if (vals == null) return null;
-        for (String s : vals) if (s != null && !s.trim().isEmpty()) return s.trim();
+    // ========== Firebase fetch ==========
+    private void fetchFromFirebase(String id) {
+        DatabaseReference projRef = FirebaseDatabase.getInstance().getReference("projects").child(id);
+        projRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
+                try {
+                    if (snapshot.exists()) {
+                        String title = findStringInSnapshot(snapshot, "projectTitle", "title", "name");
+                        String type1 = findStringInSnapshot(snapshot, "projectType1", "projectType", "type");
+                        String level = findStringInSnapshot(snapshot, "projectType2", "projectLevel", "level");
+                        String abs   = findStringInSnapshot(snapshot, "abstract", "Abstract", "abstractText", "projectAbstract");
+                        String meth  = findStringInSnapshot(snapshot, "methodology", "method", "methods");
+                        String sim   = findStringInSnapshot(snapshot, "similarity", "similarityPercent");
+                        String ai    = findStringInSnapshot(snapshot, "aiGenerated", "ai", "aiDetected");
+
+                        List<Map<String, Object>> filesList = extractFilesList(snapshot);
+
+                        // uploader details (best-effort across schema variants)
+                        String uploaderName  = firstNonEmpty(
+                                findStringInSnapshot(snapshot, "uploaderName", "ownerName", "userName"), "N/A");
+                        String uploaderDept  = firstNonEmpty(
+                                findStringInSnapshot(snapshot, "uploaderDepartment", "department", "dept"), "N/A");
+                        String uploaderPhone = firstNonEmpty(
+                                findStringInSnapshot(snapshot, "uploaderPhone", "phoneNumber", "phone"), "N/A");
+                        String uploaderEmail = firstNonEmpty(
+                                findStringInSnapshot(snapshot, "uploaderEmail", "email"), "N/A");
+
+                        // Try to resolve UID reliably (top-level or inside uploadedBy{})
+                        uploaderUidResolved = firstNonEmpty(
+                                findStringInSnapshot(snapshot, "uploaderId", "uploaderUid", "uid", "userId"),
+                                parseFromUploadedBy(snapshot, "uid"),
+                                null
+                        );
+
+                        // If uploadedBy{} exists, pull nested fields like name/department/phone/email from it
+                        if (isBlankOrNA(uploaderName) || looksLikeRegisterNumber(uploaderName)) {
+                            String ubName = coerceFromUploadedBy(snapshot,
+                                    new String[]{"fullName","displayName","studentName","name","userName","username","ownerName"});
+                            // combine first+last if needed
+                            if (isBlankOrNA(ubName) || looksLikeRegisterNumber(ubName)) {
+                                String fn = coerceFromUploadedBy(snapshot, new String[]{"firstName","first_name","fname"});
+                                String ln = coerceFromUploadedBy(snapshot, new String[]{"lastName","last_name","lname"});
+                                String comb = combine(fn, ln);
+                                if (notEmpty(comb)) ubName = comb;
+                            }
+                            if (notEmpty(ubName)) uploaderName = ubName;
+                        }
+                        if (isBlankOrNA(uploaderDept)) {
+                            uploaderDept = coerceFromUploadedBy(snapshot, new String[]{"department","dept","branch"});
+                        }
+                        if (isBlankOrNA(uploaderPhone) || "0".equals(uploaderPhone)) {
+                            String code = coerceFromUploadedBy(snapshot, new String[]{"phoneCode","countryCode"});
+                            String num  = coerceFromUploadedBy(snapshot, new String[]{"phone","phoneNumber"});
+                            if (notEmpty(code) || notEmpty(num)) {
+                                uploaderPhone = (notEmpty(code) ? code + " " : "") + (notEmpty(num) ? num : "");
+                            } else {
+                                uploaderPhone = coerceFromUploadedBy(snapshot, new String[]{"phone"});
+                            }
+                        }
+                        if (isBlankOrNA(uploaderEmail)) {
+                            uploaderEmail = coerceFromUploadedBy(snapshot, new String[]{"email"});
+                        }
+
+                        // Final best name: skip regno; fallback to email-based
+                        String bestName = bestHumanName(
+                                uploaderName,
+                                deriveNameFromEmail(uploaderEmail)
+                        );
+
+                        uploaderEmailResolved = notEmpty(uploaderEmail) ? uploaderEmail : null;
+                        uploaderPhoneResolvedDigits = extractDigits(notEmpty(uploaderPhone) ? uploaderPhone : "");
+
+                        // Paint main UI
+                        populateUI(
+                                firstNonEmpty(title, intentTitle, "N/A"),
+                                firstNonEmpty(type1, intentProjectType1, "N/A"),
+                                firstNonEmpty(level, intentProjectLevel, "N/A"),
+                                firstNonEmpty(abs, intentAbstract, "N/A"),
+                                firstNonEmpty(meth, intentMethodology, "N/A"),
+                                firstNonEmpty(sim, intentSimilarity, "N/A"),
+                                firstNonEmpty(ai, intentAi, "N/A"),
+                                filesList
+                        );
+                        uploadedByTv.setText(firstNonEmpty(bestName, "N/A"));
+                        departmentTv.setText(firstNonEmpty(uploaderDept, "N/A"));
+                        phoneTv.setText(firstNonEmpty(uploaderPhone, "N/A"));
+                        emailTv.setText(firstNonEmpty(uploaderEmail, "N/A"));
+
+                        // Need profile lookup if name still bad (map-like/N-A/regno) or other blanks
+                        if (notEmpty(uploaderUidResolved)) {
+                            String shownName = uploadedByTv.getText().toString();
+                            boolean needProfile =
+                                    isMapLike(shownName) || "N/A".equals(shownName) || looksLikeRegisterNumber(shownName) ||
+                                            "N/A".equals(departmentTv.getText().toString()) ||
+                                            "N/A".equals(phoneTv.getText().toString());
+                            if (needProfile) {
+                                fetchUploaderProfileAndFill(uploaderUidResolved);
+                            }
+                        }
+
+                        // cache whole snapshot
+                        saveSnapshotToPrefs(projectId, snapshot);
+                    } else {
+                        Toast.makeText(AllProjectSummaryActivity.this, "Project not found.", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "parse error", e);
+                }
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) {
+                Log.e(TAG, "db error: " + error.getMessage());
+            }
+        });
+    }
+
+    /** Lookup Users/{uid} and fill missing: name, department, phone, email */
+    private void fetchUploaderProfileAndFill(@NonNull String uid) {
+        FirebaseDatabase.getInstance().getReference("Users").child(uid)
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override public void onDataChange(@NonNull DataSnapshot snap) {
+                        try {
+                            // Prefer real name keys, skip register-number-looking values
+                            String name = bestHumanName(
+                                    val(snap,"fullName"),
+                                    val(snap,"displayName"),
+                                    val(snap,"studentName"),
+                                    combine(val(snap,"firstName"), val(snap,"lastName")),
+                                    val(snap,"userName"),
+                                    val(snap,"username"),
+                                    val(snap,"name"), // last
+                                    deriveNameFromEmail(val(snap,"email"))
+                            );
+                            String dept = firstNonEmpty(val(snap,"department"), val(snap,"dept"), val(snap,"branch"), "N/A");
+                            String code = firstNonEmpty(val(snap,"phoneCode"), val(snap,"countryCode"), "");
+                            String num  = firstNonEmpty(val(snap,"phoneNumber"), val(snap,"phone"), "");
+                            String phone = notEmpty(code) || notEmpty(num) ? (notEmpty(code) ? code + " " : "") + num : "N/A";
+                            String email = firstNonEmpty(val(snap,"email"), emailTv.getText().toString(), "N/A");
+
+                            String currentShown = uploadedByTv.getText().toString();
+                            if (isMapLike(currentShown) || "N/A".equals(currentShown) || looksLikeRegisterNumber(currentShown)) {
+                                uploadedByTv.setText(firstNonEmpty(name, currentShown, "N/A"));
+                            }
+                            if ("N/A".equals(departmentTv.getText().toString())) {
+                                departmentTv.setText(firstNonEmpty(dept, "N/A"));
+                            }
+                            if ("N/A".equals(phoneTv.getText().toString())) {
+                                phoneTv.setText(firstNonEmpty(phone, "N/A"));
+                            }
+                            if ("N/A".equals(emailTv.getText().toString())) {
+                                emailTv.setText(firstNonEmpty(email, "N/A"));
+                            }
+
+                            uploaderEmailResolved = firstNonEmpty(email, uploaderEmailResolved);
+                            uploaderPhoneResolvedDigits = extractDigits(firstNonEmpty(phone, uploaderPhoneResolvedDigits));
+                        } catch (Exception ignored) {}
+                    }
+                    @Override public void onCancelled(@NonNull DatabaseError error) { }
+                });
+    }
+
+    // Helpers for reading DataSnapshot children safely
+    private static String val(DataSnapshot s, String key) {
+        try { Object v = s.child(key).getValue(); return v == null ? null : String.valueOf(v).trim(); }
+        catch (Exception e) { return null; }
+    }
+    private static String combine(String a, String b) {
+        if (!notEmpty(a) && !notEmpty(b)) return null;
+        return (notEmpty(a) ? a.trim() : "") + (notEmpty(a) && notEmpty(b) ? " " : "") + (notEmpty(b) ? b.trim() : "");
+    }
+
+    // Pull a simple string from uploadedBy{} if present, by preferred keys
+    private String coerceFromUploadedBy(DataSnapshot root, String[] keys) {
+        try {
+            DataSnapshot ub = root.child("uploadedBy");
+            if (!ub.exists()) return null;
+            Object obj = ub.getValue();
+            if (obj instanceof Map) {
+                @SuppressWarnings("unchecked") Map<String,Object> m = (Map<String, Object>) obj;
+                for (String k: keys) {
+                    Object v = m.get(k);
+                    if (v == null) {
+                        for (String mk : m.keySet()) {
+                            if (normalizeKey(mk).equals(normalizeKey(k))) { v = m.get(mk); break; }
+                        }
+                    }
+                    if (v != null && String.valueOf(v).trim().length() > 0) return String.valueOf(v).trim();
+                }
+                Object f = pickByNames(m, new String[]{"firstName","first_name","fname"});
+                Object l = pickByNames(m, new String[]{"lastName","last_name","lname"});
+                String combined = combine(f == null ? null : String.valueOf(f), l == null ? null : String.valueOf(l));
+                if (notEmpty(combined)) return combined;
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+    private String parseFromUploadedBy(DataSnapshot root, String key) {
+        return coerceFromUploadedBy(root, new String[]{key});
+    }
+    private static Object pickByNames(Map<String,Object> m, String[] keys) {
+        for (String k : keys) {
+            if (m.containsKey(k)) return m.get(k);
+            for (String mk : m.keySet()) {
+                if (normalizeKey(mk).equals(normalizeKey(k))) return m.get(mk);
+            }
+        }
         return null;
     }
 
-    private String notEmptyOrDefault(String val, String def) {
-        return (val != null && !val.trim().isEmpty()) ? val : def;
-    }
-
-    private String safe(String s) {
-        return s == null || s.trim().isEmpty() ? "N/A" : s;
-    }
-
-    private String formatFileInfoList(List<String> fileInfoList) {
-        if (fileInfoList == null || fileInfoList.isEmpty()) return "No files";
-        StringBuilder sb = new StringBuilder();
-        int c = 1;
-        for (String fi : fileInfoList) {
-            if (fi == null) continue;
-            if (fi.contains("||")) {
-                String[] parts = fi.split("\\|\\|");
-                String name = parts.length > 0 ? parts[0] : fi;
-                String size = parts.length > 1 ? parts[1] : "N/A";
-                if (name.toLowerCase(Locale.ROOT).startsWith("primary folder")) {
-                    sb.append(name).append("\n");
-                } else {
-                    sb.append(c++).append(". ").append(name).append(" (").append(size).append(")\n");
+    private List<Map<String, Object>> extractFilesList(DataSnapshot snapshot) {
+        try {
+            if (snapshot.hasChild("files")) {
+                Object fobj = snapshot.child("files").getValue();
+                if (fobj instanceof List) {
+                    //noinspection unchecked
+                    return (List<Map<String, Object>>) fobj;
                 }
-            } else {
-                sb.append(c++).append(". ").append(fi).append("\n");
             }
-        }
-        return sb.toString().trim();
+            Object topVal = snapshot.getValue();
+            if (topVal instanceof Map) {
+                //noinspection unchecked
+                Map<String, Object> m = (Map<String, Object>) topVal;
+                Object candidate = findObjectInMapByKeyNames(m, new String[]{"files", "file", "attachments"});
+                if (candidate instanceof List) {
+                    //noinspection unchecked
+                    return (List<Map<String, Object>>) candidate;
+                }
+            }
+        } catch (Exception ignore) { }
+        return null;
     }
 
-    @SuppressWarnings("unchecked")
-    private static Object findObjectInMapByKeyNames(Map<String, Object> map, String[] keys) {
+    private void populateUI(String title, String type1, String level, String abs, String meth,
+                            String sim, String ai, List<Map<String, Object>> filesList) {
+        cachedProjectTitle = firstNonEmpty(title, ""); // for primary-folder heuristics
+
+        titleTv.setText(firstNonEmpty(title, "N/A"));
+        typeTv.setText(firstNonEmpty(type1, "N/A"));
+        levelTv.setText(firstNonEmpty(level, "N/A"));
+        abstractTv.setText(firstNonEmpty(abs, "N/A"));
+        methodologyTv.setText(firstNonEmpty(meth, "N/A"));
+        similarityTv.setText(firstNonEmpty(sim, "N/A"));
+        aiGeneratedTv.setText(firstNonEmpty(ai, "N/A"));
+
+        if (filesList != null && !filesList.isEmpty()) {
+            filesTv.setText(formatFileInfoList(filesList));
+        } else if (intentFileInfoList != null && !intentFileInfoList.isEmpty()) {
+            // Number selected files, skip numbering for the first entry (assumed primary folder)
+            StringBuilder sb = new StringBuilder();
+            int serial = 1;
+            for (int i = 0; i < intentFileInfoList.size(); i++) {
+                String s = intentFileInfoList.get(i);
+                if (s == null) continue;
+                s = s.trim();
+                if (s.isEmpty()) continue;
+                if (sb.length() > 0) sb.append("\n");
+                if (i == 0) {
+                    // Primary folder: no serial number
+                    sb.append(s);
+                } else {
+                    sb.append(serial++).append(". ").append(s);
+                }
+            }
+            filesTv.setText(sb.length() == 0 ? "N/A" : sb.toString());
+        } else {
+            filesTv.setText("N/A");
+        }
+    }
+
+    // ====== cache (instant paint) ======
+    private void saveSnapshotToPrefs(String id, DataSnapshot snapshot) {
+        try {
+            if (id == null) return;
+            Object obj = snapshot.getValue();
+            if (obj == null) return;
+            JSONObject json = new JSONObject((Map<?, ?>) obj);
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putString(keyForProject(id), json.toString())
+                    .apply();
+        } catch (Exception ignored) {}
+    }
+
+    private void loadFromPrefsAndPopulate(String id) {
+        try {
+            if (id == null) return;
+            String js = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getString(keyForProject(id), null);
+            if (js == null) return;
+            JSONObject obj = new JSONObject(js);
+
+            String title = obj.optString("projectTitle", obj.optString("title", obj.optString("name", "")));
+            String type1 = obj.optString("projectType1", obj.optString("projectType", obj.optString("type", "")));
+            String level = obj.optString("projectType2", obj.optString("projectLevel", obj.optString("level", "")));
+            String abs   = obj.optString("abstract", obj.optString("Abstract", obj.optString("abstractText", obj.optString("projectAbstract", ""))));
+            String meth  = obj.optString("methodology", obj.optString("method", obj.optString("methods", "")));
+            String sim   = obj.optString("similarity", obj.optString("similarityPercent", ""));
+            String ai    = obj.optString("aiGenerated", obj.optString("ai", obj.optString("aiDetected", "")));
+
+            // quick paint
+            populateUI(
+                    firstNonEmpty(title, intentTitle, "N/A"),
+                    firstNonEmpty(type1, intentProjectType1, "N/A"),
+                    firstNonEmpty(level, intentProjectLevel, "N/A"),
+                    firstNonEmpty(abs, intentAbstract, "N/A"),
+                    firstNonEmpty(meth, intentMethodology, "N/A"),
+                    firstNonEmpty(sim, intentSimilarity, "N/A"),
+                    firstNonEmpty(ai, intentAi, "N/A"),
+                    null
+            );
+
+            // Uploaded-by from cache with nested object fallbacks and regno filter
+            String rawName = firstNonEmpty(
+                    obj.optString("uploaderName", null),
+                    obj.optString("ownerName", null),
+                    obj.optString("userName", null)
+            );
+            // Try uploadedBy { ... }
+            if (isBlankOrNA(rawName) || looksLikeRegisterNumber(rawName)) {
+                JSONObject ub = obj.optJSONObject("uploadedBy");
+                if (ub != null) {
+                    rawName = firstNonEmpty(
+                            ub.optString("fullName", null),
+                            ub.optString("displayName", null),
+                            ub.optString("studentName", null),
+                            combine(ub.optString("firstName", null), ub.optString("lastName", null)),
+                            ub.optString("name", null),
+                            ub.optString("userName", null),
+                            ub.optString("username", null)
+                    );
+                }
+            }
+            String email = firstNonEmpty(
+                    obj.optString("uploaderEmail", null),
+                    obj.optString("email", null),
+                    obj.optJSONObject("uploadedBy") != null ? obj.optJSONObject("uploadedBy").optString("email", null) : null
+            );
+            String bestName = bestHumanName(rawName, deriveNameFromEmail(email));
+            uploadedByTv.setText(firstNonEmpty(bestName, "N/A"));
+
+            // Dept
+            String dept = firstNonEmpty(
+                    obj.optString("uploaderDepartment", null),
+                    obj.optString("department", null),
+                    obj.optString("dept", null)
+            );
+            if (isBlankOrNA(dept) && obj.optJSONObject("uploadedBy") != null) {
+                dept = firstNonEmpty(
+                        obj.optJSONObject("uploadedBy").optString("department", null),
+                        obj.optJSONObject("uploadedBy").optString("dept", null),
+                        obj.optJSONObject("uploadedBy").optString("branch", null)
+                );
+            }
+            departmentTv.setText(firstNonEmpty(dept, "N/A"));
+
+            // Phone
+            String code = firstNonEmpty(
+                    obj.optString("phoneCode", null),
+                    obj.optJSONObject("uploadedBy") != null ? obj.optJSONObject("uploadedBy").optString("phoneCode", null) : null,
+                    obj.optJSONObject("uploadedBy") != null ? obj.optJSONObject("uploadedBy").optString("countryCode", null) : null
+            );
+            String num  = firstNonEmpty(
+                    obj.optString("uploaderPhone", null),
+                    obj.optString("phoneNumber", null),
+                    obj.optString("phone", null),
+                    obj.optJSONObject("uploadedBy") != null ? obj.optJSONObject("uploadedBy").optString("phoneNumber", null) : null,
+                    obj.optJSONObject("uploadedBy") != null ? obj.optJSONObject("uploadedBy").optString("phone", null) : null
+            );
+            if (notEmpty(code) || notEmpty(num)) {
+                phoneTv.setText((notEmpty(code)? code + " " : "") + num);
+            } else {
+                phoneTv.setText("N/A");
+            }
+
+            emailTv.setText(firstNonEmpty(email, "N/A"));
+        } catch (Exception ignored) {}
+    }
+
+    private static String keyForProject(String id) { return "proj_" + id; }
+
+    // ========== helpers ==========
+    private void loadCurrentUserProfilePhone() {
+        try {
+            if (currentUid == null) return;
+            FirebaseDatabase.getInstance().getReference("Users").child(currentUid)
+                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            try {
+                                String code = String.valueOf(snapshot.child("phoneCode").getValue());
+                                String num  = String.valueOf(snapshot.child("phoneNumber").getValue());
+                                String merged = ((code != null && !code.trim().isEmpty()) ? code + " " : "") + (num == null ? "" : num);
+                                currentPhoneDigits = extractDigits(merged);
+                            } catch (Exception ignored) {}
+                        }
+                        @Override public void onCancelled(@NonNull DatabaseError error) {}
+                    });
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isSelfAttempt(String candidateNumber) {
+        String cand = extractDigits(candidateNumber);
+        if (currentPhoneDigits != null && !currentPhoneDigits.isEmpty() && !cand.isEmpty()) {
+            if (cand.equals(currentPhoneDigits)) return true;
+            if (cand.endsWith(currentPhoneDigits) || currentPhoneDigits.endsWith(cand)) return true;
+        }
+        if (currentEmail != null && uploaderEmailResolved != null && currentEmail.equalsIgnoreCase(uploaderEmailResolved)) return true;
+        if (currentUid != null && uploaderUidResolved != null && currentUid.equals(uploaderUidResolved)) return true;
+        return false;
+    }
+
+    private void saveChatRecord(String peerName, String peerPhone, String via) {
+        try {
+            String me = (FirebaseAuth.getInstance().getCurrentUser() != null)
+                    ? FirebaseAuth.getInstance().getCurrentUser().getUid() : "anonymous";
+
+            // --- keep existing backend write (unchanged) ---
+            DatabaseReference chats = FirebaseDatabase.getInstance()
+                    .getReference("chats").child(me).push();
+            chats.child("peerName").setValue(peerName);
+            chats.child("peerPhone").setValue(peerPhone);
+            chats.child("via").setValue(via);
+            chats.child("timestamp").setValue(ServerValue.TIMESTAMP);
+
+            // --- Dedup locally so only one row per (peer, via). Update timestamp instead of adding duplicates ---
+            Context ctx = getApplicationContext();
+            android.content.SharedPreferences prefs = ctx.getSharedPreferences("app_prefs", MODE_PRIVATE);
+            String key = "chats_" + me;
+            String existing = prefs.getString(key, "[]");
+            JSONArray arr = new JSONArray(existing);
+
+            String candDigits = extractDigits(peerPhone);
+            int foundIndex = -1;
+            JSONObject found = null;
+
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.optJSONObject(i);
+                if (o == null) continue;
+                String v = String.valueOf(o.optString("via", ""));
+                String num = String.valueOf(o.optString("number", ""));
+                String numDigits = extractDigits(num);
+                boolean numbersMatch = (!candDigits.isEmpty() && !numDigits.isEmpty()) &&
+                        (candDigits.equals(numDigits) || candDigits.endsWith(numDigits) || numDigits.endsWith(candDigits));
+                if (numbersMatch && v.equalsIgnoreCase(via)) {
+                    foundIndex = i;
+                    found = o;
+                    break;
+                }
+            }
+
+            long now = System.currentTimeMillis();
+            if (found != null) {
+                // update fields & move to end (most recent)
+                found.put("name", peerName);
+                found.put("number", peerPhone);
+                found.put("via", via);
+                found.put("ts", now);
+
+                JSONArray newArr = new JSONArray();
+                for (int i = 0; i < arr.length(); i++) {
+                    if (i == foundIndex) continue;
+                    Object item = arr.opt(i);
+                    if (item != null) newArr.put(item);
+                }
+                newArr.put(found);
+                prefs.edit().putString(key, newArr.toString()).apply();
+            } else {
+                JSONObject obj = new JSONObject();
+                obj.put("name", peerName);
+                obj.put("number", peerPhone);
+                obj.put("via", via);              // "call" or "sms" or "whatsapp"
+                obj.put("ts", now);
+                arr.put(obj);
+                prefs.edit().putString(key, arr.toString()).apply();
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private static String firstNonEmpty(String... vals) {
+        if (vals == null) return "N/A";
+        for (String s : vals) {
+            if (s != null && !s.trim().isEmpty() && !"null".equalsIgnoreCase(s.trim())) return s.trim();
+        }
+        return "N/A";
+    }
+
+    private static boolean notEmpty(String s) { return s != null && !s.trim().isEmpty() && !"null".equalsIgnoreCase(s.trim()); }
+    private static boolean isBlankOrNA(String s) { return (s == null || s.trim().isEmpty() || "N/A".equalsIgnoreCase(s.trim())); }
+
+    private static boolean isMapLike(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        return t.startsWith("{") && t.endsWith("}") && t.contains("=");
+    }
+
+    private static String safe(Object tvText) {
+        if (tvText == null) return "";
+        String s = String.valueOf(tvText);
+        return (s == null) ? "" : s.trim();
+    }
+    private static String safeTrim(String s) { return s == null ? null : s.trim(); }
+
+    private static String extractForTel(String s) {
+        if (s == null) return "";
+        s = s.trim();
+        StringBuilder sb = new StringBuilder();
+        char[] cs = s.toCharArray();
+        for (int i = 0; i < cs.length; i++) {
+            char c = cs[i];
+            if (Character.isDigit(c)) sb.append(c);
+            else if (c == '+' && sb.length() == 0) sb.append('+');
+        }
+        return sb.toString();
+    }
+
+    private static String extractDigits(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder();
+        char[] cs = s.toCharArray();
+        for (char c : cs) if (Character.isDigit(c)) sb.append(c);
+        return sb.toString();
+    }
+
+    private Object findObjectInMapByKeyNames(Map<String, Object> map, String[] keys) {
         if (map == null || keys == null) return null;
         for (String k : keys) {
             if (k == null) continue;
-            if (map.containsKey(k) && map.get(k) != null) return map.get(k);
-        }
-        for (String key : keys) {
-            String nk = normalizeKey(key);
+            String nk = normalizeKey(k);
+            if (map.containsKey(k)) return map.get(k);
             for (String mkey : map.keySet()) {
                 if (normalizeKey(mkey).equals(nk)) return map.get(mkey);
             }
@@ -635,7 +824,19 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
                 if (k == null) continue;
                 if (snapshot.hasChild(k)) {
                     Object v = snapshot.child(k).getValue();
-                    if (v != null) return String.valueOf(v).trim();
+                    if (v == null) continue;
+                    if (v instanceof Map) {
+                        @SuppressWarnings("unchecked") Map<String,Object> m = (Map<String, Object>) v;
+                        Object nameLike = pickByNames(m, new String[]{"fullName","displayName","studentName","name","userName","username","ownerName","value","title","text"});
+                        if (nameLike != null) {
+                            String s = String.valueOf(nameLike).trim();
+                            return s;
+                        }
+                        Object emailLike = pickByNames(m, new String[]{"email"});
+                        if (emailLike != null) return String.valueOf(emailLike).trim();
+                        continue;
+                    }
+                    return String.valueOf(v).trim();
                 }
             }
             Object top = snapshot.getValue();
@@ -644,7 +845,12 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
                 Map<String, Object> map = (Map<String, Object>) top;
                 for (String k : desiredKeys) {
                     Object v = findObjectInMapByKeyNames(map, new String[]{k});
-                    if (v != null) return String.valueOf(v).trim();
+                    if (v != null && !(v instanceof Map)) return String.valueOf(v).trim();
+                    if (v instanceof Map) {
+                        @SuppressWarnings("unchecked") Map<String,Object> mm = (Map<String, Object>) v;
+                        Object nameLike = pickByNames(mm, new String[]{"fullName","displayName","studentName","name","userName","username","ownerName","value","title","text","email"});
+                        if (nameLike != null) return String.valueOf(nameLike).trim();
+                    }
                 }
                 Deque<Object> queue = new ArrayDeque<>();
                 queue.add(map);
@@ -658,7 +864,13 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
                             Object value = e.getValue();
                             for (String desired : desiredKeys) {
                                 if (normalizeKey(candidateKey).equals(normalizeKey(desired)) && value != null) {
-                                    return String.valueOf(value).trim();
+                                    if (value instanceof Map) {
+                                        @SuppressWarnings("unchecked") Map<String,Object> m2 = (Map<String, Object>) value;
+                                        Object v2 = pickByNames(m2, new String[]{"fullName","displayName","studentName","name","userName","username","ownerName","value","title","text","email"});
+                                        if (v2 != null) return String.valueOf(v2).trim();
+                                    } else {
+                                        return String.valueOf(value).trim();
+                                    }
                                 }
                             }
                             if (value instanceof Map || value instanceof List) {
@@ -681,26 +893,144 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
     }
 
-    // Prepare a cleaned tel string preserving a leading '+' if present (for ACTION_DIAL).
-    private static String extractForTel(String s) {
-        if (s == null) return "";
-        s = s.trim();
-        StringBuilder sb = new StringBuilder();
-        char[] cs = s.toCharArray();
-        for (int i = 0; i < cs.length; i++) {
-            char c = cs[i];
-            if (Character.isDigit(c)) sb.append(c);
-            else if (c == '+' && sb.length() == 0) sb.append('+'); // only allow leading plus
-        }
-        return sb.toString();
+    private static boolean isTrue(Object o) {
+        if (o == null) return false;
+        if (o instanceof Boolean) return (Boolean) o;
+        String s = String.valueOf(o).trim();
+        return "true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s) || "y".equalsIgnoreCase(s);
     }
 
-    // Extract only digits (useful for constructing wa.me links).
-    private static String extractDigits(String s) {
-        if (s == null) return "";
-        StringBuilder sb = new StringBuilder();
-        char[] cs = s.toCharArray();
-        for (char c : cs) if (Character.isDigit(c)) sb.append(c);
-        return sb.toString();
+    private static boolean equalsIgnoreCase(Object o, String s) {
+        return o != null && s != null && s.equalsIgnoreCase(String.valueOf(o).trim());
+    }
+
+    private boolean isFolderEntry(Map<String, Object> m, String name) {
+        try {
+            if (m == null) return false;
+            Object flag = findObjectInMapByKeyNames(m, new String[]{"isFolder","isDirectory","folder","directory"});
+            if (isTrue(flag)) return true;
+            Object type = findObjectInMapByKeyNames(m, new String[]{"type","mime","kind"});
+            if (equalsIgnoreCase(type, "folder") || equalsIgnoreCase(type, "directory") || equalsIgnoreCase(type, "dir")) return true;
+            Object children = findObjectInMapByKeyNames(m, new String[]{"children","items"});
+            if (children instanceof List) return true;
+            if (name != null) {
+                if (name.endsWith("/")) return true;
+                String nm = name.toLowerCase(Locale.ROOT);
+                if (!nm.contains(".") && nm.length() <= 40) return true; // heuristic
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private boolean isPrimaryFolderEntry(Map<String, Object> m, String name, int index, boolean alreadyFound) {
+        if (alreadyFound) return false;
+        if (isTrue(findObjectInMapByKeyNames(m, new String[]{"primary","isPrimary","root","isRoot"}))) return true;
+        if (name != null && notEmpty(cachedProjectTitle) && name.trim().equalsIgnoreCase(cachedProjectTitle.trim())) return true;
+        // Fallback: first folder in the list
+        return index == 1 && isFolderEntry(m, name);
+    }
+
+    private String formatFileInfoList(List<Map<String, Object>> list) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            int serial = 1;
+            boolean primaryMarked = false;
+            int index = 0;
+
+            for (Map<String, Object> m : list) {
+                index++;
+                if (m == null) continue;
+                String name = String.valueOf(findObjectInMapByKeyNames(m, new String[]{"name", "fileName", "title"}));
+                if ("null".equalsIgnoreCase(name)) name = null;
+                String size = String.valueOf(findObjectInMapByKeyNames(m, new String[]{"size", "fileSize"}));
+                if ("null".equalsIgnoreCase(size)) size = null;
+
+                boolean isFolder = isFolderEntry(m, name);
+                boolean isPrimary = isFolder && isPrimaryFolderEntry(m, name, index, primaryMarked);
+                if (isPrimary) primaryMarked = true;
+
+                if (sb.length() > 0) sb.append("\n");
+
+                String displayName = notEmpty(name) ? name.trim() : "Item";
+
+                if (isPrimary) {
+                    // Primary folder: no serial, no size
+                    sb.append(displayName);
+                } else if (isFolder) {
+                    // Other folders: no serial (safer), no size
+                    sb.append(displayName);
+                } else {
+                    // Files: show serial + size if present
+                    sb.append(serial++).append(". ").append(displayName);
+                    if (notEmpty(size)) {
+                        sb.append(" (").append(size.trim()).append(")");
+                    }
+                }
+            }
+            return sb.length() == 0 ? "N/A" : sb.toString();
+        } catch (Exception e) {
+            return "N/A";
+        }
+    }
+
+    private static String deriveNameFromEmail(String email) {
+        try {
+            if (!notEmpty(email)) return null;
+            String local = email.split("@")[0];
+            local = local.replaceAll("[^a-zA-Z0-9._-]", " ");
+            String[] parts = local.split("[._-]+");
+            StringBuilder sb = new StringBuilder();
+            for (String p : parts) {
+                if (p.isEmpty()) continue;
+                sb.append(Character.toUpperCase(p.charAt(0)));
+                if (p.length() > 1) sb.append(p.substring(1));
+                sb.append(" ");
+            }
+            String s = sb.toString().trim();
+            return s.isEmpty() ? null : s;
+        } catch (Exception e) { return null; }
+    }
+
+    /** Choose first non-empty, non-register-number-like value. */
+    private static String bestHumanName(String... candidates) {
+        // pass 1: good human-like
+        for (String c : candidates) {
+            if (notEmpty(c) && !looksLikeRegisterNumber(c)) return c.trim();
+        }
+        // pass 2: anything non-empty if all look like regnos
+        for (String c : candidates) {
+            if (notEmpty(c)) return c.trim();
+        }
+        return null;
+    }
+
+    /** Heuristic: detect register-number-looking strings (no spaces, has digits, length 5-20, mostly alnum, often uppercase). */
+    private static boolean looksLikeRegisterNumber(String s) {
+        if (!notEmpty(s)) return false;
+        String t = s.trim();
+        if (t.contains("@")) return false;     // emails are fine
+        if (t.contains(" ")) return false;     // names usually have spaces
+        int len = t.length();
+        if (len < 5 || len > 20) return false;
+
+        int digits = 0, letters = 0, others = 0, lowers = 0;
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if (Character.isDigit(c)) digits++;
+            else if (Character.isLetter(c)) {
+                letters++;
+                if (Character.isLowerCase(c)) lowers++;
+            } else if (c=='_' || c=='-' || c=='.') {
+                // allowed
+            } else {
+                others++;
+            }
+        }
+        if (others > 0) return false;
+        if (digits == 0) return false;
+        // Strong signals: no lowercase + some digits -> likely reg no
+        if (lowers == 0 && digits >= 2) return true;
+        // If digits dominate letters, also likely a reg no
+        return digits >= 3 && digits >= letters;
     }
 }

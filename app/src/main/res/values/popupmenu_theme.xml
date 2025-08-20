@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Customize these to change popup menu colors -->
+    <color name="popupMenuBg">#000000</color>
+    <color name="popupMenuText">#FFFFFF</color>
+
+    <style name="DarkPopupMenu" parent="ThemeOverlay.AppCompat.Dark">
+        <item name="popupMenuStyle">@style/DarkPopupMenuStyle</item>
+    </style>
+
+    <style name="DarkPopupMenuStyle" parent="Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/popup_menu_bg</item>
+        <item name="android:itemTextAppearance">@style/DarkPopupMenuItemText</item>
+    </style>
+
+    <style name="DarkPopupMenuItemText" parent="@style/TextAppearance.AppCompat.Body1">
+        <item name="android:textColor">@color/popupMenuText</item>
+    </style>
+
+</resources>

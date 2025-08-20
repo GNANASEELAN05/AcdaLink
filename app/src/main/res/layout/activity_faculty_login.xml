@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    tools:context=".FacultyLoginActivity">
+
+    <!-- Toolbar like UploadProjectActivity -->
+    <RelativeLayout
+        android:id="@+id/toolbarRl"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="#03A9F4">
+
+        <ImageButton
+            android:id="@+id/toolbarBackBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="8dp"
+            android:background="@android:color/transparent"
+            android:padding="10dp"
+            android:src="@drawable/ic_back_white"
+            android:tint="@android:color/white" />
+
+        <TextView
+            android:id="@+id/toolbarTitleTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:background="@android:color/transparent"
+            android:text="Faculty Login"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <!-- Main Scrollable Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/toolbarRl"
+        android:fillViewport="true"
+        android:padding="16dp">
+
+        <!-- Child must be wrap_content so content can scroll above keyboard -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <!-- Profile Icon -->
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/profileIv"
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:layout_centerHorizontal="true"
+                android:background="#03A9F4"
+                android:src="@drawable/ic_person_white"
+                app:shapeAppearanceOverlay="@style/ImageStyle_circle" />
+
+            <!-- Subheading -->
+            <TextView
+                android:id="@+id/loginLabelTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/profileIv"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="10dp"
+                android:text="Login To Your Account"
+                android:textColor="#000000"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <!-- Email Input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/emailTil"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/loginLabelTv"
+                android:layout_marginTop="20dp"
+                android:hint="Email"
+                android:textColorHint="#6E6E6E"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
+                app:errorEnabled="true"
+                app:hintTextColor="#03A9F4"
+                app:startIconDrawable="@drawable/ic_email_white"
+                app:startIconTint="#6E6E6E">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/emailEt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textEmailAddress"
+                    android:paddingStart="40dp"
+                    android:paddingTop="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="16dp"
+                    android:textColor="#000000" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Password Input -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/passwordTil"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/emailTil"
+                android:layout_marginTop="16dp"
+                android:hint="Password"
+                android:textColorHint="#6E6E6E"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/black"
+                app:endIconMode="password_toggle"
+                app:errorEnabled="true"
+                app:hintTextColor="#03A9F4"
+                app:startIconDrawable="@drawable/ic_lock_white"
+                app:startIconTint="#6E6E6E">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/passwordEt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:paddingStart="40dp"
+                    android:paddingTop="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="16dp"
+                    android:textColor="#000000"
+                    android:textColorHint="#6E6E6E" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Login Button (no register/forgot; placed after inputs so it scrolls with content) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/loginBtn2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/passwordTil"
+                android:layout_marginTop="32dp"
+                android:backgroundTint="#03A9F4"
+                android:text="LOGIN"
+                android:textColor="@android:color/white"
+                app:cornerRadius="8dp" />
+
+            <!-- Spacer -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:layout_below="@id/loginBtn2" />
+
+        </RelativeLayout>
+    </ScrollView>
+</RelativeLayout>
