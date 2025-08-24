@@ -96,4 +96,16 @@
 
         </LinearLayout>
     </ScrollView>
+
+    <!-- AI Logo at bottom right -->
+    <ImageView
+        android:id="@+id/aiLogo"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:contentDescription="AI Logo"
+        android:src="@drawable/ai_circle_logo" />
+
 </RelativeLayout>

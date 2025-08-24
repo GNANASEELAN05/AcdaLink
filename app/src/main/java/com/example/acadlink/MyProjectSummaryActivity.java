@@ -6,10 +6,15 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Picture;
+import android.graphics.RectF;
+import android.graphics.Typeface;
 import android.graphics.pdf.PdfDocument;
+import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.print.PrintAttributes;
+import android.print.pdf.PrintedPdfDocument;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.ContextThemeWrapper;
@@ -17,6 +22,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageButton;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -28,6 +34,7 @@ import androidx.appcompat.widget.PopupMenu;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.widget.NestedScrollView;
 
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
@@ -277,56 +284,237 @@ public class MyProjectSummaryActivity extends AppCompatActivity {
         }
     }
 
-    // ======= Export to PDF (no layout/ID changes) =======
+    // ======= Export to PDF (points, true A4; mobile-friendly fit) =======
     private void exportCurrentSummaryToPdf() {
+        PrintedPdfDocument pdf = null;
+        OutputStream os = null;
         try {
-            View content = findViewById(R.id.main); // whole page
-            if (content == null) {
-                Toast.makeText(this, "Content not found.", Toast.LENGTH_SHORT).show();
-                return;
+            final String title = firstNonEmpty(String.valueOf(titleTv.getText()), getBestProjectTitleForFileName());
+            final String type1 = firstNonEmpty(String.valueOf(typeTv.getText()), "N/A");
+            final String level = firstNonEmpty(String.valueOf(levelTv.getText()), "N/A");
+            final String similarity = firstNonEmpty(String.valueOf(similarityTv.getText()), "N/A");
+            final String ai = firstNonEmpty(String.valueOf(aiTv.getText()), "N/A");
+            final String abs = firstNonEmpty(String.valueOf(abstractTv.getText()), "N/A");
+            final String meth = firstNonEmpty(String.valueOf(methodologyTv.getText()), "N/A");
+            final String filesBlock = firstNonEmpty(String.valueOf(filesTv.getText()), "N/A");
+
+            // A4 page; drawing units in points
+            final int dpi = 300;
+            PrintAttributes attrs = new PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                    .setResolution(new PrintAttributes.Resolution("pdf", "pdf", dpi, dpi))
+                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                    .build();
+
+            // mils -> points (1 inch = 72 points; 1 inch = 1000 mils)
+            final int pageW = Math.round(attrs.getMediaSize().getWidthMils()  * 72f / 1000f);  // ~595
+            final int pageH = Math.round(attrs.getMediaSize().getHeightMils() * 72f / 1000f);  // ~842
+
+            // Margins in points
+            final float mL = 0.6f * 72f, mR = 0.6f * 72f, mT = 0.6f * 72f, mB = 0.6f * 72f;
+            final float contentW = pageW - mL - mR;
+
+            // Paints (sizes in points)
+            Paint hSmall = new Paint(Paint.ANTI_ALIAS_FLAG); hSmall.setTextSize(10f); hSmall.setColor(0xFF666666);
+            Paint hTitle = new Paint(Paint.ANTI_ALIAS_FLAG); hTitle.setTextSize(18f);
+            hTitle.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD)); hTitle.setColor(0xFF000000);
+            Paint section = new Paint(Paint.ANTI_ALIAS_FLAG); section.setTextSize(13f);
+            section.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD)); section.setColor(0xFF000000);
+            Paint body = new Paint(Paint.ANTI_ALIAS_FLAG); body.setTextSize(11f); body.setColor(0xFF000000);
+            Paint label = new Paint(Paint.ANTI_ALIAS_FLAG); label.setTextSize(11f);
+            label.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD)); label.setColor(0xFF000000);
+            Paint value = new Paint(Paint.ANTI_ALIAS_FLAG); value.setTextSize(11f); value.setColor(0xFF000000);
+            Paint line = new Paint(Paint.ANTI_ALIAS_FLAG); line.setStyle(Paint.Style.STROKE); line.setStrokeWidth(0.75f); line.setColor(0xFF000000);
+            Paint footerPaint = new Paint(Paint.ANTI_ALIAS_FLAG); footerPaint.setTextSize(9f); footerPaint.setColor(0xFF666666);
+
+            pdf = new PrintedPdfDocument(this, attrs);
+            // >>> FIX: use a final reference inside the inner class
+            final PrintedPdfDocument pdfDoc = pdf;
+
+            class Drawer {
+                int pageNo = 0;
+                PdfDocument.Page page;
+                Canvas canvas;
+                float y;
+
+                void newPage() {
+                    PdfDocument.PageInfo info = new PdfDocument.PageInfo.Builder(pageW, pageH, ++pageNo).create();
+                    page = pdfDoc.startPage(info);        // use pdfDoc (final)
+                    canvas = page.getCanvas();
+                    y = mT;
+
+                    canvas.drawText("Project Summary", mL, y, hSmall);
+                    y += (hSmall.getFontMetrics().descent - hSmall.getFontMetrics().ascent) + 3f;
+                    canvas.drawText(title, mL, y, hTitle);
+                    y += (hTitle.getFontMetrics().descent - hTitle.getFontMetrics().ascent) + 6f;
+
+                    canvas.drawLine(mL, y, mL + contentW, y, line);
+                    y += 8f;
+                }
+
+                void ensureSpace(float needed) {
+                    if (y + needed > pageH - mB) {
+                        finishPageFooter();
+                        pdfDoc.finishPage(page);         // use pdfDoc (final)
+                        newPage();
+                    }
+                }
+
+                void finishPageFooter() {
+                    String pn = "Page " + pageNo;
+                    float w = footerPaint.measureText(pn);
+                    float cx = mL + (contentW - w) / 2f;
+                    float fy = pageH - (mB / 2f);
+                    canvas.drawText(pn, cx, fy, footerPaint);
+                }
+
+                java.util.List<String> wrap(String text, Paint p, float maxWidth) {
+                    java.util.List<String> lines = new java.util.ArrayList<>();
+                    if (text == null) return lines;
+                    String[] paras = text.replace("\r", "").split("\n");
+                    for (String para : paras) {
+                        if (para.trim().isEmpty()) { lines.add(""); continue; }
+                        String[] words = para.split("\\s+");
+                        StringBuilder cur = new StringBuilder();
+                        for (String w : words) {
+                            String test = (cur.length() == 0) ? w : cur + " " + w;
+                            if (p.measureText(test) <= maxWidth) {
+                                cur.setLength(0); cur.append(test);
+                            } else {
+                                if (cur.length() > 0) lines.add(cur.toString());
+                                cur.setLength(0); cur.append(w);
+                            }
+                        }
+                        if (cur.length() > 0) lines.add(cur.toString());
+                    }
+                    return lines;
+                }
+
+                float lineHeight(Paint p) {
+                    Paint.FontMetrics fm = p.getFontMetrics();
+                    return (fm.descent - fm.ascent) * 1.15f;
+                }
+
+                void drawWrappedText(String text, Paint p, float x, float maxWidth) {
+                    java.util.List<String> lines = wrap(text, p, maxWidth);
+                    float lh = lineHeight(p);
+                    for (String l : lines) {
+                        ensureSpace(lh);
+                        canvas.drawText(l, x, y - p.getFontMetrics().ascent, p);
+                        y += lh;
+                    }
+                }
+
+                float drawTableRow(String left, String right, float leftW, float rightW, float pad) {
+                    java.util.List<String> l1 = wrap(left, label, leftW - 2 * pad);
+                    java.util.List<String> l2 = wrap(right, value, rightW - 2 * pad);
+                    float h1 = Math.max(1, l1.size()) * lineHeight(label) + 2 * pad;
+                    float h2 = Math.max(1, l2.size()) * lineHeight(value) + 2 * pad;
+                    float rowH = Math.max(h1, h2);
+
+                    ensureSpace(rowH);
+
+                    float x1 = mL;
+                    float x2 = mL + leftW;
+                    float top = y;
+                    float bottom = y + rowH;
+
+                    canvas.drawRect(new RectF(x1, top, x1 + leftW, bottom), line);
+                    canvas.drawRect(new RectF(x2, top, x2 + rightW, bottom), line);
+
+                    float textY = y + pad - label.getFontMetrics().ascent;
+                    for (String s : l1) { canvas.drawText(s, x1 + pad, textY, label); textY += lineHeight(label); }
+
+                    textY = y + pad - value.getFontMetrics().ascent;
+                    for (String s : l2) { canvas.drawText(s, x2 + pad, textY, value); textY += lineHeight(value); }
+
+                    y = bottom;
+                    return rowH;
+                }
             }
 
-            // Render view to bitmap
-            content.setDrawingCacheEnabled(true);
-            content.buildDrawingCache(true);
-            Bitmap bmp = Bitmap.createBitmap(content.getWidth(), content.getHeight(), Bitmap.Config.ARGB_8888);
-            Canvas c = new Canvas(bmp);
-            content.draw(c);
+            Drawer d = new Drawer();
+            d.newPage();
 
-            PdfDocument doc = new PdfDocument();
-            PdfDocument.PageInfo info = new PdfDocument.PageInfo.Builder(bmp.getWidth(), bmp.getHeight(), 1).create();
-            PdfDocument.Page page = doc.startPage(info);
-            Canvas pc = page.getCanvas();
-            pc.drawBitmap(bmp, 0, 0, null);
-            doc.finishPage(page);
+            float tablePad = 6f;
+            float leftColW = contentW * 0.32f;
+            float rightColW = contentW - leftColW;
 
-            String fileName = "ProjectSummary_" + (projectId == null ? "unknown" : projectId) + ".pdf";
-            Uri uri = null;
-            OutputStream os;
+            d.drawTableRow("Project Title", title, leftColW, rightColW, tablePad);
+            d.drawTableRow("Type",          type1, leftColW, rightColW, tablePad);
+            d.drawTableRow("Level",         level, leftColW, rightColW, tablePad);
+            d.drawTableRow("Similarity",    similarity, leftColW, rightColW, tablePad);
+            d.drawTableRow("AI Generated",  ai, leftColW, rightColW, tablePad);
 
+            d.y += 12f;
+
+            d.canvas.drawText("Abstract", mL, d.y - section.getFontMetrics().ascent, section);
+            d.y += (section.getFontMetrics().descent - section.getFontMetrics().ascent) + 4f;
+            d.drawWrappedText(abs, body, mL, contentW);
+
+            d.y += 10f;
+
+            d.canvas.drawText("Methodology", mL, d.y - section.getFontMetrics().ascent, section);
+            d.y += (section.getFontMetrics().descent - section.getFontMetrics().ascent) + 4f;
+            d.drawWrappedText(meth, body, mL, contentW);
+
+            d.y += 10f;
+
+            d.canvas.drawText("Files", mL, d.y - section.getFontMetrics().ascent, section);
+            d.y += (section.getFontMetrics().descent - section.getFontMetrics().ascent) + 4f;
+
+            if (!"N/A".equalsIgnoreCase(filesBlock.trim())) {
+                String[] linesArr = filesBlock.split("\\r?\\n");
+                float lh = d.lineHeight(body);
+                int counter = 1;
+                for (String ln : linesArr) {
+                    String txt = (ln == null) ? "" : ln.trim();
+                    if (txt.isEmpty()) { d.ensureSpace(lh); d.y += lh; continue; }
+                    String prefix = counter + ". ";
+                    float prefixW = body.measureText(prefix);
+                    java.util.List<String> wrapped = d.wrap(txt, body, contentW - prefixW);
+
+                    d.ensureSpace(lh);
+                    d.canvas.drawText(prefix + wrapped.get(0), mL, d.y - body.getFontMetrics().ascent, body);
+                    d.y += lh;
+
+                    for (int i = 1; i < wrapped.size(); i++) {
+                        d.ensureSpace(lh);
+                        d.canvas.drawText(wrapped.get(i), mL + prefixW, d.y - body.getFontMetrics().ascent, body);
+                        d.y += lh;
+                    }
+                    counter++;
+                }
+            } else {
+                d.drawWrappedText("N/A", body, mL, contentW);
+            }
+
+            d.finishPageFooter();
+            pdfDoc.finishPage(d.page); // use final reference
+
+            String fileName = "Project Summary - " + sanitizeFileName(getBestProjectTitleForFileName()) + ".pdf";
+            Uri uri;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ContentValues cv = new ContentValues();
                 cv.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
                 cv.put(MediaStore.Downloads.MIME_TYPE, "application/pdf");
                 uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
-                if (uri == null) throw new IllegalStateException("Storage unavailable");
-                os = getContentResolver().openOutputStream(uri);
             } else {
-                // Best-effort for legacy devices — may require WRITE_EXTERNAL_STORAGE in your manifest
-                uri = Uri.fromFile(new java.io.File(android.os.Environment.getExternalStoragePublicDirectory(
-                        android.os.Environment.DIRECTORY_DOWNLOADS), fileName));
-                os = getContentResolver().openOutputStream(uri);
+                uri = Uri.fromFile(new java.io.File(
+                        android.os.Environment.getExternalStoragePublicDirectory(
+                                android.os.Environment.DIRECTORY_DOWNLOADS), fileName));
             }
-
+            if (uri == null) throw new IllegalStateException("Storage unavailable");
+            os = getContentResolver().openOutputStream(uri);
             if (os == null) throw new IllegalStateException("Output stream null");
-            doc.writeTo(os);
-            os.close();
-            doc.close();
-
+            pdf.writeTo(os);
             Toast.makeText(this, "Saved to Downloads: " + fileName, Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             Log.e("ExportPDF", "failed", e);
             Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        } finally {
+            try { if (os != null) os.close(); } catch (Exception ignored) {}
+            try { if (pdf != null) pdf.close(); } catch (Exception ignored) {}
         }
     }
 
@@ -557,11 +745,11 @@ public class MyProjectSummaryActivity extends AppCompatActivity {
 
                 if (sb.length() > 0) sb.append("\n");
 
-                String displayName = notEmpty(name) ? name.trim() : "Item";
+                String displayName = notEmpty(name) ? name.trim() : "Primary Folder";
 
                 if (isPrimary) {
-                    // Primary folder: no serial, no size
-                    sb.append(displayName);
+                    // Primary folder: labeled + name (no serial, no size)
+                    sb.append("").append(displayName);
                 } else if (isFolder) {
                     // Other folders: no serial, no size
                     sb.append(displayName);
@@ -598,5 +786,21 @@ public class MyProjectSummaryActivity extends AppCompatActivity {
         } catch (Exception ignored) {
             return "N/A";
         }
+    }
+
+    // ======= small helpers for PDF naming =======
+    private String getBestProjectTitleForFileName() {
+        String fromTv = (titleTv != null) ? String.valueOf(titleTv.getText()) : null;
+        if (notEmpty(fromTv) && !"N/A".equalsIgnoreCase(fromTv.trim())) return fromTv.trim();
+        if (notEmpty(cachedProjectTitle) && !"N/A".equalsIgnoreCase(cachedProjectTitle)) return cachedProjectTitle.trim();
+        if (notEmpty(intentTitle) && !"N/A".equalsIgnoreCase(intentTitle)) return intentTitle.trim();
+        return (projectId != null && !projectId.isEmpty()) ? projectId : "Project";
+    }
+
+    private static String sanitizeFileName(String s) {
+        String cleaned = (s == null) ? "Project" : s.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]+", " ").trim();
+        if (cleaned.isEmpty()) cleaned = "Project";
+        // Keep file names reasonable in length
+        return cleaned.length() > 120 ? cleaned.substring(0, 120).trim() : cleaned;
     }
 }

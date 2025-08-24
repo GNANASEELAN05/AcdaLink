@@ -17,6 +17,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
@@ -102,16 +103,16 @@ public class HomeFragment extends Fragment {
                     startActivity(new Intent(getActivity(), AllProjectsActivity.class));
                     return true;
                 } else if (title.equalsIgnoreCase("Request To Faculty")) {
-                    // ✅ Navigate to RequestToFacultyActivity
                     startActivity(new Intent(getActivity(), RequestToFacultyActivity.class));
                     return true;
                 } else if (title.equalsIgnoreCase("Request Received")) {
-                    // ✅ Navigate to RequestReceivedActivity
                     startActivity(new Intent(getActivity(), RequestReceivedActivity.class));
                     return true;
                 } else if (title.equalsIgnoreCase("Request Sent")) {
-                    // ✅ Navigate to RequestSentActivity
                     startActivity(new Intent(getActivity(), RequestSentActivity.class));
+                    return true;
+                } else if (title.equalsIgnoreCase("Downloads")) {
+                    startActivity(new Intent(getActivity(), DownloadsActivity.class));
                     return true;
                 }
 
@@ -141,6 +142,13 @@ public class HomeFragment extends Fragment {
                 renderResults(s == null ? "" : s.toString());
             }
             @Override public void afterTextChanged(Editable s) {}
+        });
+
+        // ---------------- AI LOGO CLICK ----------------
+        ImageView aiLogo = rootView.findViewById(R.id.aiLogo);
+        aiLogo.setOnClickListener(v -> {
+            Intent intent = new Intent(getActivity(), AiProjectRecommender.class);
+            startActivity(intent);
         });
 
         return rootView;
@@ -246,12 +254,12 @@ public class HomeFragment extends Fragment {
         titleTv.setText(p.title);
         titleTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         titleTv.setTypeface(titleTv.getTypeface(), android.graphics.Typeface.BOLD);
-        titleTv.setTextColor(0xFF000000); // black bold title
+        titleTv.setTextColor(0xFF000000);
 
         TextView subTv = new TextView(requireContext());
         subTv.setText(p.subtitle);
         subTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        subTv.setTextColor(0xFF000000); // black normal text
+        subTv.setTextColor(0xFF000000);
 
         box.addView(titleTv);
         if (p.subtitle != null && !p.subtitle.isEmpty()) box.addView(subTv);

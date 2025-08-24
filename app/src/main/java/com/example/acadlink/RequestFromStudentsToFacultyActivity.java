@@ -180,7 +180,7 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
         String ai = getStringChild(snapshot, "aiGenerated", "N/A");
 
         // Status from archive
-        String status = getStringChild(snapshot, "status", "requested");
+        String status = getStringChild(snapshot, "Status", "Requested");
 
         // Card using your reference style, but reduced padding/fonts for a compact look
         MaterialCardView card = new MaterialCardView(this);
@@ -317,7 +317,7 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
 
             FirebaseUser user = auth.getCurrentUser();
             SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-            String finalStatus = "accepted";
+            String finalStatus = "Accepted";
 
             Map<String, Object> facultyApproval = new HashMap<>();
             facultyApproval.put("status", finalStatus);
@@ -363,7 +363,7 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
 
             FirebaseUser user = auth.getCurrentUser();
             SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-            String finalStatus = "rejected";
+            String finalStatus = "Rejected";
 
             Map<String, Object> facultyApproval = new HashMap<>();
             facultyApproval.put("status", finalStatus);

@@ -270,14 +270,13 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
     /**
      * Modified requestDownload:
      * - Builds a request object with requester and project/uploader info.
-     * - Writes the request both to:
-     *   - downloadRequests/<projectId>/<requesterUid>  (keeps prior behavior / compatibility)
-     *   - downloadRequestsReceived/<uploaderUid>/<projectId>/<requesterUid>
-     *   - downloadRequestsSent/<requesterUid>/<projectId>
+     * - Checks existing sent/inbox (without writing anything prematurely).
+     * - If existing non-Rejected request is found -> block.
+     * - If existing request was Rejected (or none found) -> prompt user to resend (if Rejected) or send immediately.
      *
-     * Status stored: "pending" initially. Accept/Reject updates status in both received & sent nodes.
-     *
-     * NOTE: This keeps all original ids/names intact and adds only the minimal writes required.
+     * Changes: status checks are now robust (trim, lower-case, substring match for 'reject'/'accept'/'pend')
+     * and we now **aggregate both sentRef and compatRef** statuses before deciding — so a Rejected in *either*
+     * node will correctly show the resend dialog even if the other node still says Pending.
      */
     private void requestDownload() {
         if (projectId == null || projectId.isEmpty()) {
@@ -301,7 +300,15 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         String uploaderName = safe(uploadedByTv != null ? uploadedByTv.getText() : null);
         String projectTitle = firstNonEmpty(cachedProjectTitle, intentTitle, safe(titleTv != null ? titleTv.getText() : null), "N/A");
 
-        // build payload
+        // ---------- NEW: self-request prevention (same UX as call/sms/whatsapp) ----------
+        String phoneShown = safe(phoneTv != null ? phoneTv.getText() : null);
+        if (isSelfAttempt(phoneShown) || (currentUid != null && uploaderUid != null && currentUid.equals(uploaderUid))) {
+            Toast.makeText(this, "You cannot request yourself", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // ------------------------------------------------------------------------------
+
+        // build payload (status Pending - capitalized)
         Map<String, Object> payload = new HashMap<>();
         payload.put("requesterUid", uid);
         payload.put("requesterName", requesterName);
@@ -311,39 +318,177 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
         payload.put("projectTitle", projectTitle);
         payload.put("uploaderUid", uploaderUid);
         payload.put("uploaderName", uploaderName);
-        payload.put("status", "pending");
+        payload.put("status", "Pending"); // <-- changed from "pending" to "Pending"
         payload.put("requestedAt", ServerValue.TIMESTAMP);
 
-        // 1) original compatibility location (project-scoped)
+        // Database refs (do NOT write compatRef yet)
         DatabaseReference compatRef = FirebaseDatabase.getInstance()
                 .getReference("downloadRequests")
                 .child(projectId)
                 .child(uid);
 
-        compatRef.setValue(payload)
-                .addOnFailureListener(e -> {
-                    // log only; continue to attempt inbox/sent writes
-                    Log.w(TAG, "compatRef write failed: " + e.getMessage());
-                });
-
-        // 2) received inbox for uploader
         DatabaseReference inboxRef = FirebaseDatabase.getInstance()
                 .getReference("downloadRequestsReceived")
                 .child(uploaderUid)
                 .child(projectId)
                 .child(uid);
 
-        // 3) sent list for requester
         DatabaseReference sentRef = FirebaseDatabase.getInstance()
                 .getReference("downloadRequestsSent")
                 .child(uid)
                 .child(projectId);
 
-        // write both (atomic-ish, but we write separately)
+        // 1) Check downloadRequestsSent/<uid>/<projectId> first, but **do not return immediately** on a 'Pending' result.
+        //    Instead aggregate statuses from both sentRef and compatRef and then decide.
+        sentRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override public void onDataChange(@NonNull DataSnapshot sentSnap) {
+                // use array-wrappers to allow mutation from nested scope
+                final boolean[] sentWasRejected = new boolean[]{false};
+                final boolean[] sentWasPending = new boolean[]{false};
+                final boolean[] sentWasAccepted = new boolean[]{false};
+
+                try {
+                    if (sentSnap.exists()) {
+                        Object rawStatusObj = sentSnap.child("status").getValue();
+                        String existingStatusRaw = safeString(rawStatusObj);
+                        Log.d(TAG, "sentRef status raw: " + existingStatusRaw);
+
+                        if (notEmpty(existingStatusRaw)) {
+                            String sNorm = existingStatusRaw.trim().toLowerCase(Locale.ROOT);
+                            if (sNorm.contains("reject")) {
+                                sentWasRejected[0] = true;
+                            } else if (sNorm.contains("pend")) {
+                                // mark pending but DO NOT return here — we need to check compatRef as well
+                                sentWasPending[0] = true;
+                            } else if (sNorm.contains("accept")) {
+                                sentWasAccepted[0] = true;
+                            } else {
+                                // some other non-empty status -> treat as already sent (unknown)
+                                Toast.makeText(AllProjectSummaryActivity.this,
+                                        "Request already sent.", Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error while reading sentRef status: " + e.getMessage());
+                }
+
+                // 2) Check legacy compat node (downloadRequests/<projectId>/<uid>) and then make a decision combining both statuses
+                compatRef.addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override public void onDataChange(@NonNull DataSnapshot compatSnap) {
+                        try {
+                            boolean compatWasRejected = false;
+                            boolean compatWasPending = false;
+                            boolean compatWasAccepted = false;
+
+                            if (compatSnap.exists()) {
+                                Object compStatusObj = compatSnap.child("status").getValue();
+                                String compStatusRaw = safeString(compStatusObj);
+                                Log.d(TAG, "compatRef status raw: " + compStatusRaw);
+
+                                if (notEmpty(compStatusRaw)) {
+                                    String cNorm = compStatusRaw.trim().toLowerCase(Locale.ROOT);
+                                    if (cNorm.contains("reject")) {
+                                        compatWasRejected = true;
+                                    } else if (cNorm.contains("pend")) {
+                                        compatWasPending = true;
+                                    } else if (cNorm.contains("accept")) {
+                                        compatWasAccepted = true;
+                                    } else {
+                                        // unknown non-empty status — we'll treat it as "already sent"
+                                    }
+                                }
+                            }
+
+                            // DECISION PRIORITY:
+                            // 1) If either side shows Accepted -> treat as accepted.
+                            if (sentWasAccepted[0] || compatWasAccepted) {
+                                Toast.makeText(AllProjectSummaryActivity.this,
+                                        "Request already accepted.", Toast.LENGTH_SHORT).show();
+                                try {
+                                    Intent i = new Intent(AllProjectSummaryActivity.this, RequestSentActivity.class);
+                                    i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                                    startActivity(i);
+                                } catch (Exception ignored) {
+                                    // RequestSentActivity might not be available in all copies - ignore safely
+                                }
+                                return;
+                            }
+
+                            // 2) If either side shows Rejected -> ask to resend (this fixes the bug you reported).
+                            if (sentWasRejected[0] || compatWasRejected) {
+                                // show confirmation dialog: previous request was rejected -> ask to resend
+                                new AlertDialog.Builder(AllProjectSummaryActivity.this)
+                                        .setTitle("Request rejected")
+                                        .setMessage("Your previous request was rejected. Do you want to resend the request?")
+                                        .setPositiveButton("Resend", (dialog, which) -> {
+                                            // Proceed to write the same payload as before
+                                            writeRequest(payload, compatRef, inboxRef, sentRef);
+                                        })
+                                        .setNegativeButton("Cancel", (dialog, which) -> {
+                                            // user cancelled - do nothing
+                                        })
+                                        .setCancelable(true)
+                                        .show();
+                                return;
+                            }
+
+                            // 3) If either side shows Pending -> inform user to wait.
+                            if (sentWasPending[0] || compatWasPending) {
+                                Toast.makeText(AllProjectSummaryActivity.this,
+                                        "Request already sent — waiting for approval.", Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+
+                            // 4) No blocking record found -> proceed to write payload
+                            writeRequest(payload, compatRef, inboxRef, sentRef);
+
+                        } catch (Exception ignored) {}
+
+                    }
+
+                    @Override public void onCancelled(@NonNull DatabaseError error) {
+                        // Be conservative on error: show verification failure message
+                        Toast.makeText(AllProjectSummaryActivity.this, "Failed to verify previous request: " + (error != null ? error.getMessage() : "unknown"), Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+
+            @Override public void onCancelled(@NonNull DatabaseError error) {
+                Toast.makeText(AllProjectSummaryActivity.this, "Failed to verify previous request: " + (error != null ? error.getMessage() : "unknown"), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Centralized write flow (keeps behaviour identical to previous code).
+     * Writes compatRef (best-effort), then inboxRef -> sentRef and notifies user.
+     */
+    private void writeRequest(Map<String, Object> payload, DatabaseReference compatRef, DatabaseReference inboxRef, DatabaseReference sentRef) {
+        // Write compatRef (best-effort)
+        try {
+            compatRef.setValue(payload)
+                    .addOnFailureListener(e -> Log.w(TAG, "compatRef write failed: " + e.getMessage()));
+        } catch (Exception e) {
+            Log.w(TAG, "compatRef write failure (exception): " + e.getMessage());
+        }
+
+        // Write inboxRef then sentRef (same success/failure handling as original)
         inboxRef.setValue(payload)
                 .addOnSuccessListener(unused -> {
                     sentRef.setValue(payload)
-                            .addOnSuccessListener(u2 -> Toast.makeText(AllProjectSummaryActivity.this, "Request sent", Toast.LENGTH_SHORT).show())
+                            .addOnSuccessListener(u2 -> {
+                                // success: user notified + navigate to RequestSentActivity
+                                Toast.makeText(AllProjectSummaryActivity.this, "Request sent", Toast.LENGTH_SHORT).show();
+                                try {
+                                    Intent i = new Intent(AllProjectSummaryActivity.this, RequestSentActivity.class);
+                                    i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                                    startActivity(i);
+                                } catch (Exception ignored) {
+                                    // RequestSentActivity might not be available in all copies - ignore safely
+                                }
+                            })
                             .addOnFailureListener(e -> Toast.makeText(AllProjectSummaryActivity.this, "Failed to save sent record: " + e.getMessage(), Toast.LENGTH_SHORT).show());
                 })
                 .addOnFailureListener(e -> {
@@ -850,6 +995,12 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
     }
     private static String safeTrim(String s) { return s == null ? null : s.trim(); }
 
+    // ---- Added helper to match other classes' helper name and avoid compile error ----
+    private static String safeString(Object o) {
+        try { return o == null ? null : String.valueOf(o); } catch (Exception e) { return null; }
+    }
+    // ----------------------------------------------------------------------------------
+
     private static String extractForTel(String s) {
         if (s == null) return "";
         s = s.trim();
@@ -1017,7 +1168,7 @@ public class AllProjectSummaryActivity extends AppCompatActivity {
 
                 if (sb.length() > 0) sb.append("\n");
 
-                String displayName = notEmpty(name) ? name.trim() : "Item";
+                String displayName = notEmpty(name) ? name.trim() : "Primary Folder";
 
                 if (isPrimary) {
                     // Primary folder: no serial, no size

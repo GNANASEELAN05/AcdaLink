@@ -93,8 +93,6 @@ public class RequestToFacultyActivity extends AppCompatActivity {
         if (toolbarBackBtn != null) {
             toolbarBackBtn.setOnClickListener(v -> {
                 Intent intent = new Intent(RequestToFacultyActivity.this, MainActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
                 finish();
             });
         }
@@ -172,7 +170,7 @@ public class RequestToFacultyActivity extends AppCompatActivity {
         String title = getStringChild(snapshot, "projectTitle", getStringChild(snapshot, "title", "Untitled"));
         String similarity = getStringChild(snapshot, "similarity", "N/A");
         String ai = getStringChild(snapshot, "aiGenerated", "N/A");
-        String status = getStringChild(snapshot, "status", "requested");
+        String status = getStringChild(snapshot, "status", "Requested");
 
         MaterialCardView card = new MaterialCardView(this);
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
@@ -302,7 +300,7 @@ public class RequestToFacultyActivity extends AppCompatActivity {
                 archiveRef.child(archiveId).child("status").setValue("uploaded").addOnCompleteListener(uTask -> {
                     if (uTask.isSuccessful()) {
                         Toast.makeText(RequestToFacultyActivity.this, "Project moved to Projects.", Toast.LENGTH_SHORT).show();
-                        if (statusTv != null) statusTv.setText("Status: uploaded");
+                        if (statusTv != null) statusTv.setText("Status: Uploaded");
                         if (uploadBtn != null) uploadBtn.setVisibility(View.GONE);
                         // keep archive entry visible; do not remove
                         // optional: navigate to MyProjects

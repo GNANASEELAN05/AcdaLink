@@ -56,6 +56,8 @@ dependencies {
     implementation("com.google.firebase:firebase-storage:20.2.1")
     implementation ("com.google.firebase:firebase-database:20.2.2")
     implementation ("com.google.android.gms:play-services-tasks:18.0.2")
+    implementation ("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation ("com.google.code.gson:gson:2.10.1")
 
 
     // Glide for image loading

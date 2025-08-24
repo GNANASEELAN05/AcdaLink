@@ -76,6 +76,19 @@ public class RequestReceivedActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Loads downloadRequestsReceived/<currentUid> and resolves requester display names BEFORE
+     * populating the adapter. This prevents the temporary display of registration-number-like
+     * requester names followed by an update to the human name.
+     *
+     * Strategy:
+     *  - Count total requests.
+     *  - Create a temp list with placeholders at exact positions so ordering is preserved.
+     *  - For each request:
+     *      - If stored requesterName looks good -> place it immediately in temp.
+     *      - Else -> fetch Users/{uid} once (singleValue) and populate temp[index] in callback.
+     *  - When all async lookups complete (or immediately if none required), copy temp -> items and notify adapter.
+     */
     private void loadReceivedRequests() {
         DatabaseReference ref = FirebaseDatabase.getInstance()
                 .getReference("downloadRequestsReceived")
@@ -84,26 +97,164 @@ public class RequestReceivedActivity extends AppCompatActivity {
             @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
                 items.clear();
                 try {
+                    // First count total number of request entries to preserve ordering.
+                    int total = 0;
+                    for (DataSnapshot projectSnap : snapshot.getChildren()) {
+                        for (DataSnapshot reqSnap : projectSnap.getChildren()) {
+                            total++;
+                        }
+                    }
+
+                    if (total == 0) {
+                        // nothing to show
+                        adapter.notifyDataSetChanged();
+                        return;
+                    }
+
+                    // temp list with exact positions (preserve ordering)
+                    final List<RequestItem> temp = new ArrayList<>(total);
+                    for (int i = 0; i < total; i++) temp.add(null);
+
+                    final int[] idxCounter = new int[]{0};    // to track insertion index
+                    final int[] pending = new int[]{0};       // number of outstanding async user lookups
+
                     for (DataSnapshot projectSnap : snapshot.getChildren()) {
                         String projId = projectSnap.getKey();
                         for (DataSnapshot reqSnap : projectSnap.getChildren()) {
-                            RequestItem r = new RequestItem();
+                            final int index = idxCounter[0]++;
+
+                            final RequestItem r = new RequestItem();
                             r.projectId = projId;
                             r.requesterUid = safeString(reqSnap.child("requesterUid").getValue());
-                            r.requesterName = safeString(reqSnap.child("requesterName").getValue());
+                            String requesterNameFromDb = safeString(reqSnap.child("requesterName").getValue());
+                            r.requesterName = requesterNameFromDb;
                             r.projectTitle = safeString(reqSnap.child("projectTitle").getValue());
                             r.status = safeString(reqSnap.child("status").getValue());
                             r.requestedAt = reqSnap.child("requestedAt").getValue();
-                            items.add(r);
+
+                            // If the stored name is missing or looks like a registration number, fetch Users/{uid}
+                            if ((requesterNameFromDb == null || requesterNameFromDb.trim().isEmpty()) ||
+                                    looksLikeRegisterNumber(requesterNameFromDb)) {
+
+                                // If requesterUid is missing, fallback immediately
+                                if (r.requesterUid == null || r.requesterUid.trim().isEmpty()) {
+                                    r.requesterName = firstNonEmpty(requesterNameFromDb, "Unknown");
+                                    temp.set(index, r);
+                                    continue;
+                                }
+
+                                pending[0]++;
+
+                                final int fIndex = index;
+                                final String originalDbName = requesterNameFromDb;
+
+                                DatabaseReference userRef = FirebaseDatabase.getInstance().getReference("Users").child(r.requesterUid);
+                                userRef.addListenerForSingleValueEvent(new ValueEventListener() {
+                                    @Override public void onDataChange(@NonNull DataSnapshot snapUser) {
+                                        try {
+                                            String name = firstNonEmpty(
+                                                    val(snapUser, "fullName"),
+                                                    val(snapUser, "displayName"),
+                                                    val(snapUser, "studentName"),
+                                                    combine(val(snapUser, "firstName"), val(snapUser, "lastName")),
+                                                    val(snapUser, "userName"),
+                                                    val(snapUser, "username"),
+                                                    val(snapUser, "name"),
+                                                    deriveNameFromEmail(val(snapUser, "email"))
+                                            );
+                                            if (isBlankOrNA(name) || looksLikeRegisterNumber(name)) {
+                                                // fallback to email-derived pretty name or DB value
+                                                String fallback = deriveNameFromEmail(val(snapUser, "email"));
+                                                name = firstNonEmpty(fallback, originalDbName, "Unknown");
+                                            }
+                                            r.requesterName = firstNonEmpty(name, originalDbName, "Unknown");
+                                        } catch (Exception e) {
+                                            r.requesterName = firstNonEmpty(originalDbName, "Unknown");
+                                        } finally {
+                                            temp.set(fIndex, r);
+                                            pending[0]--;
+                                            // When last pending resolved, publish the list
+                                            if (pending[0] == 0) {
+                                                items.clear();
+                                                for (RequestItem it : temp) if (it != null) items.add(it);
+                                                runOnUiThread(() -> adapter.notifyDataSetChanged());
+                                            }
+                                        }
+                                    }
+
+                                    @Override public void onCancelled(@NonNull DatabaseError error) {
+                                        // on failure, use stored DB name or Unknown
+                                        r.requesterName = firstNonEmpty(originalDbName, "Unknown");
+                                        temp.set(fIndex, r);
+                                        pending[0]--;
+                                        if (pending[0] == 0) {
+                                            items.clear();
+                                            for (RequestItem it : temp) if (it != null) items.add(it);
+                                            runOnUiThread(() -> adapter.notifyDataSetChanged());
+                                        }
+                                    }
+                                });
+                            } else {
+                                // Good name available in DB: use it directly
+                                temp.set(index, r);
+                            }
                         }
                     }
+
+                    // If there were no async lookups required, publish immediately.
+                    if (pending[0] == 0) {
+                        items.clear();
+                        for (RequestItem it : temp) if (it != null) items.add(it);
+                        adapter.notifyDataSetChanged();
+                    }
+
                 } catch (Exception e) {
                     Log.e(TAG, "parse error", e);
+                    adapter.notifyDataSetChanged();
                 }
-                adapter.notifyDataSetChanged();
             }
             @Override public void onCancelled(@NonNull DatabaseError error) {}
         });
+    }
+
+    /** Fetch Users/{uid} and try to get a proper display name, then update the corresponding list item. */
+    private void fetchRequesterProfileAndUpdate(String uid, int index) {
+        if (uid == null || uid.trim().isEmpty()) return;
+        try {
+            DatabaseReference userRef = FirebaseDatabase.getInstance().getReference("Users").child(uid);
+            userRef.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override public void onDataChange(@NonNull DataSnapshot snap) {
+                    try {
+                        String name = firstNonEmpty(
+                                val(snap, "fullName"),
+                                val(snap, "displayName"),
+                                val(snap, "studentName"),
+                                combine(val(snap, "firstName"), val(snap, "lastName")),
+                                val(snap, "userName"),
+                                val(snap, "username"),
+                                val(snap, "name"),
+                                deriveNameFromEmail(val(snap, "email"))
+                        );
+                        if (isBlankOrNA(name) || looksLikeRegisterNumber(name)) {
+                            // fallback to email-derived pretty name
+                            name = deriveNameFromEmail(val(snap, "email"));
+                        }
+                        final String finalName = (name == null || name.trim().isEmpty()) ? null : name.trim();
+                        // update model + UI safely
+                        if (index >= 0 && index < items.size()) {
+                            RequestItem it = items.get(index);
+                            if (it != null) {
+                                it.requesterName = firstNonEmpty(finalName, it.requesterName, "Unknown");
+                                runOnUiThread(() -> {
+                                    try { adapter.notifyItemChanged(index); } catch (Exception ignored) {}
+                                });
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+                @Override public void onCancelled(@NonNull DatabaseError error) {}
+            });
+        } catch (Exception ignored) {}
     }
 
     private static class RequestItem {
@@ -268,7 +419,81 @@ public class RequestReceivedActivity extends AppCompatActivity {
                 });
     }
 
+    // ----------------- Helpers added to improve displayed requester name -----------------
+
     private static String safeString(Object o) {
         try { return o == null ? null : String.valueOf(o); } catch (Exception e) { return null; }
     }
+
+    private static boolean notEmpty(String s) { return s != null && !s.trim().isEmpty() && !"null".equalsIgnoreCase(s.trim()); }
+    private static boolean isBlankOrNA(String s) { return (s == null || s.trim().isEmpty() || "N/A".equalsIgnoreCase(s.trim())); }
+
+    private static String firstNonEmpty(String... vals) {
+        if (vals == null) return null;
+        for (String s : vals) {
+            if (s != null && !s.trim().isEmpty() && !"null".equalsIgnoreCase(s.trim())) return s.trim();
+        }
+        return null;
+    }
+
+    private static String combine(String a, String b) {
+        if (!notEmpty(a) && !notEmpty(b)) return null;
+        return (notEmpty(a) ? a.trim() : "") + (notEmpty(a) && notEmpty(b) ? " " : "") + (notEmpty(b) ? b.trim() : "");
+    }
+
+    private static String deriveNameFromEmail(String email) {
+        try {
+            if (email == null) return null;
+            if (!email.contains("@")) return email;
+            String local = email.substring(0, email.indexOf('@'));
+            String[] parts = local.split("[^A-Za-z0-9]+");
+            StringBuilder b = new StringBuilder();
+            for (String p : parts) {
+                if (p.isEmpty()) continue;
+                b.append(Character.toUpperCase(p.charAt(0)));
+                if (p.length() > 1) b.append(p.substring(1).toLowerCase());
+                b.append(' ');
+            }
+            String out = b.toString().trim();
+            return out.isEmpty() ? email : out;
+        } catch (Exception e) {
+            return email != null ? email : null;
+        }
+    }
+
+    /** Heuristic: detect register-number-looking strings (no spaces, has digits, length 5-20, mostly alnum, often uppercase). */
+    private static boolean looksLikeRegisterNumber(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        if (t.contains("@")) return false;
+        if (t.contains(" ")) return false;
+        int len = t.length();
+        if (len < 5 || len > 20) return false;
+
+        int digits = 0, letters = 0, others = 0, lowers = 0;
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if (Character.isDigit(c)) digits++;
+            else if (Character.isLetter(c)) {
+                letters++;
+                if (Character.isLowerCase(c)) lowers++;
+            } else if (c == '_' || c == '-' || c == '.') {
+                // allowed
+            } else {
+                others++;
+            }
+        }
+        if (others > 0) return false;
+        if (digits == 0) return false;
+        if (lowers == 0 && digits >= 2) return true;
+        return digits >= 3 && digits >= letters;
+    }
+
+    private static String val(DataSnapshot s, String key) {
+        try { Object v = s.child(key).getValue(); return v == null ? null : String.valueOf(v).trim(); }
+        catch (Exception e) { return null; }
+    }
+
+    // ----------------------------------------------------------------------------------------
+
 }

@@ -61,9 +61,13 @@ public class AccountFragment extends Fragment {
         });
 
         binding.logoutCv.setOnClickListener(v -> {
-            firebaseAuth.signOut();
-            startActivity(new Intent(mContext, LoginOptionsActivity.class));
-            requireActivity().finish();
+            if (firebaseUser != null && !firebaseUser.isEmailVerified()) {
+                Toast.makeText(mContext, "Verify your account to logout", Toast.LENGTH_SHORT).show();
+            } else {
+                firebaseAuth.signOut();
+                startActivity(new Intent(mContext, LoginOptionsActivity.class));
+                requireActivity().finish();
+            }
         });
 
         binding.editProfileCv.setOnClickListener(v -> {
@@ -190,8 +194,10 @@ public class AccountFragment extends Fragment {
         binding.verificationTv.setText("Verified");
         binding.verificationTv.setTextColor(ContextCompat.getColor(mContext, R.color.green));
         Drawable icon = ContextCompat.getDrawable(mContext, R.drawable.ic_verify_green);
-        binding.verificationTv.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, null, null, null);
-        binding.verificationTv.setCompoundDrawablePadding(10);
+        if (icon != null) {
+            binding.verificationTv.setCompoundDrawablesWithIntrinsicBounds(null, null, icon, null);
+            binding.verificationTv.setCompoundDrawablePadding(10);
+        }
     }
 
     private void showUnverifiedStatus() {

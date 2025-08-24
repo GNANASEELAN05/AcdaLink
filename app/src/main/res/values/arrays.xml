@@ -7,5 +7,6 @@
         <item>Request Received</item>
         <item>Request Sent</item>
         <item>Request To Faculty</item>
+        <item>Downloads</item>
     </string-array>
 </resources>

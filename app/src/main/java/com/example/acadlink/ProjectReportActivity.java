@@ -25,9 +25,9 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import com.google.android.gms.tasks.Continuation;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
@@ -53,6 +53,12 @@ import java.util.Random;
 import java.util.Set;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.net.URL;
+import java.net.HttpURLConnection;
+import java.net.URLDecoder;
 
 public class ProjectReportActivity extends AppCompatActivity {
 
@@ -215,7 +221,7 @@ public class ProjectReportActivity extends AppCompatActivity {
         uploadButton.setOnClickListener(v -> {
             uploadButton.setEnabled(false);
             Toast.makeText(ProjectReportActivity.this, "Uploading project...", Toast.LENGTH_SHORT).show();
-            uploadProjectToFirebase(); // original “actual project” upload remains unchanged
+            uploadProjectToFirebase(); // upload and write download URLs
         });
 
         // NEW: On "Request to Faculty", save to requestArchives (not projects)
@@ -270,7 +276,7 @@ public class ProjectReportActivity extends AppCompatActivity {
             map.put("files", new ArrayList<>()); // filled after storage uploads
             map.put("timestamp", System.currentTimeMillis());
             map.put("request", true);
-            map.put("status", "requested");
+            map.put("status", "Requested");
             map.put("requestFromName", requesterName != null ? requesterName : "");
             map.put("department", department != null ? department : "");
 
@@ -330,6 +336,9 @@ public class ProjectReportActivity extends AppCompatActivity {
 
     /**
      * Upload URIs to request_archive_files/<id>/..., write files[] to archive node, then open the activity.
+     * NOTE: fixed Uri detection and always writes both download URL and storagePath (gs://...)
+     * ADDED: Support for http/https remote links — downloads them temporarily then uploads to Storage.
+     * This uses processPathAndUpload helper so every file entry will contain downloadUrl and storagePath when possible.
      */
     private void uploadArchiveFilesThenOpen(String key, ArrayList<String> uriList, ArrayList<String> infoList, Intent intentAfter) {
         try {
@@ -337,75 +346,15 @@ public class ProjectReportActivity extends AppCompatActivity {
             final AtomicInteger doneCounter = new AtomicInteger(0);
             final int total = Math.max(1, uriList.size());
 
-            for (String raw : uriList) {
-                final String path = raw != null ? raw : "";
-                Uri fileUri = null;
-                try {
-                    if (!path.isEmpty() && (path.startsWith("content://") || path.startsWith("file://") || path.contains("/"))) {
-                        fileUri = Uri.parse(path);
-                    }
-                } catch (Exception ignored) {}
+            for (int idx = 0; idx < uriList.size(); ++idx) {
+                final String raw = uriList.get(idx) != null ? uriList.get(idx) : "";
+                final String displayName = (infoList != null && idx < infoList.size() && infoList.get(idx) != null)
+                        ? parseNameFromInfo(infoList.get(idx))
+                        : tryGetNameFromUriString(raw);
+                final String displaySize = tryGetFormattedSizeFromUriString(raw) != null ? tryGetFormattedSizeFromUriString(raw) : "N/A";
 
-                String displayName = tryGetNameFromUriString(path);
-                String displaySize = tryGetFormattedSizeFromUriString(path);
-                if (displaySize == null) displaySize = "N/A";
-
-                if (fileUri == null) {
-                    Map<String, String> map = new HashMap<>();
-                    map.put("name", displayName != null ? displayName : "unknown");
-                    map.put("size", displaySize);
-                    map.put("url", "");
-                    fileEntries.add(map);
-                    if (doneCounter.incrementAndGet() == total) {
-                        requestArchivesRef.child(key).child("files").setValue(fileEntries).addOnCompleteListener(t -> {
-                            startActivity(intentAfter);
-                            finish();
-                        });
-                    }
-                    continue;
-                }
-
-                String filename;
-                try {
-                    filename = (displayName != null && !displayName.isEmpty())
-                            ? displayName
-                            : new File(fileUri.getPath()).getName();
-                } catch (Exception e) {
-                    filename = "file_" + System.currentTimeMillis();
-                }
-
-                final String finalSize = displaySize;
-                final String finalName = filename;
-
-                StorageReference fileRef = archiveStorageRootRef.child(key + "/" + System.currentTimeMillis() + "_" + filename);
-                UploadTask uploadTask = fileRef.putFile(fileUri);
-                Task<Uri> urlTask = uploadTask.continueWithTask((Continuation<UploadTask.TaskSnapshot, Task<Uri>>) task -> {
-                    if (!task.isSuccessful()) throw task.getException();
-                    return fileRef.getDownloadUrl();
-                });
-
-                urlTask.addOnCompleteListener((OnCompleteListener<Uri>) task -> {
-                    String downloadUrl = "";
-                    if (task.isSuccessful() && task.getResult() != null) {
-                        downloadUrl = task.getResult().toString();
-                    }
-                    Map<String, String> map = new HashMap<>();
-                    map.put("name", finalName);       // FIXED: final for lambda
-                    map.put("size", finalSize);       // FIXED: final for lambda
-                    map.put("url", downloadUrl);
-                    fileEntries.add(map);
-
-                    if (doneCounter.incrementAndGet() == total) {
-                        requestArchivesRef.child(key).child("files").setValue(fileEntries).addOnCompleteListener(t -> {
-                            if (!t.isSuccessful()) {
-                                Toast.makeText(ProjectReportActivity.this, "Saved request but failed to write file info: " +
-                                        (t.getException() != null ? t.getException().getMessage() : ""), Toast.LENGTH_LONG).show();
-                            }
-                            startActivity(intentAfter);
-                            finish();
-                        });
-                    }
-                });
+                processPathAndUpload(key, raw, displayName != null ? displayName : ("file_" + System.currentTimeMillis()),
+                        displaySize, fileEntries, doneCounter, total, archiveStorageRootRef, true, intentAfter);
             }
         } catch (Exception e) {
             Log.e("ProjectReportActivity", "uploadArchiveFilesThenOpen error: " + e.getMessage());
@@ -413,6 +362,379 @@ public class ProjectReportActivity extends AppCompatActivity {
                 startActivity(intentAfter);
                 finish();
             } catch (Exception ignored) {}
+        }
+    }
+
+    /**
+     * Main helper: ensures path (local uri / http / gs / download url) is resolved and uploaded if needed,
+     * then writes a file entry (name,size,downloadUrl,storagePath,url) into fileEntries and finalizes when all done.
+     *
+     * - rootRef: the root StorageReference to use (project files bucket or archive bucket)
+     * - isArchive: when true, upon completion writes to requestArchivesRef.child(key).child("files") and starts intentAfter
+     *             when false, upon completion calls writeProjectToDatabase (for projects)
+     */
+    private void processPathAndUpload(final String key,
+                                      final String path,
+                                      final String displayName,
+                                      final String displaySize,
+                                      final ArrayList<Map<String, String>> fileEntries,
+                                      final AtomicInteger doneCounter,
+                                      final int total,
+                                      final StorageReference rootRef,
+                                      final boolean isArchive,
+                                      final Intent intentAfter) {
+        try {
+            final String p = path != null ? path : "";
+            // If empty path -> placeholder entry
+            if (p.trim().isEmpty()) {
+                Map<String, String> map = new HashMap<>();
+                map.put("name", displayName != null ? displayName : "unknown");
+                map.put("size", displaySize != null ? displaySize : "N/A");
+                map.put("url", "");
+                map.put("downloadUrl", "");
+                map.put("storagePath", "");
+                synchronized (fileEntries) { fileEntries.add(map); }
+                if (doneCounter.incrementAndGet() == total) {
+                    finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                }
+                return;
+            }
+
+            final String lower = p.toLowerCase(Locale.getDefault());
+
+            // 1) gs://storage paths: resolve to download URL using getReferenceFromUrl
+            if (lower.startsWith("gs://")) {
+                try {
+                    final StorageReference existingRef = FirebaseStorage.getInstance().getReferenceFromUrl(p);
+                    existingRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                        try {
+                            Map<String, String> map = new HashMap<>();
+                            map.put("name", displayName != null ? displayName : (new File(p).getName()));
+                            map.put("size", displaySize != null ? displaySize : "N/A");
+                            map.put("downloadUrl", uri != null ? uri.toString() : "");
+                            map.put("url", uri != null ? uri.toString() : "");
+                            map.put("storagePath", p);
+                            synchronized (fileEntries) { fileEntries.add(map); }
+                        } catch (Exception ignored) {}
+                        if (doneCounter.incrementAndGet() == total) {
+                            finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                        }
+                    }).addOnFailureListener(e -> {
+                        Map<String, String> map = new HashMap<>();
+                        map.put("name", displayName != null ? displayName : (new File(p).getName()));
+                        map.put("size", displaySize != null ? displaySize : "N/A");
+                        map.put("downloadUrl", "");
+                        map.put("url", "");
+                        map.put("storagePath", p);
+                        synchronized (fileEntries) { fileEntries.add(map); }
+                        if (doneCounter.incrementAndGet() == total) {
+                            finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                        }
+                    });
+                } catch (Exception e) {
+                    Map<String, String> map = new HashMap<>();
+                    map.put("name", displayName != null ? displayName : "unknown");
+                    map.put("size", displaySize != null ? displaySize : "N/A");
+                    map.put("downloadUrl", "");
+                    map.put("url", "");
+                    map.put("storagePath", p);
+                    synchronized (fileEntries) { fileEntries.add(map); }
+                    if (doneCounter.incrementAndGet() == total) {
+                        finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                    }
+                }
+                return;
+            }
+
+            // 2) If it's already a Firebase Storage HTTP download URL, store it and try to derive storagePath
+            if (isFirebaseStorageDownloadUrl(p)) {
+                String derivedStoragePath = tryExtractStoragePathFromDownloadUrl(p);
+                Map<String, String> map = new HashMap<>();
+                map.put("name", displayName != null ? displayName : (new File(p).getName()));
+                map.put("size", displaySize != null ? displaySize : "N/A");
+                map.put("downloadUrl", p);
+                map.put("url", p);
+                map.put("storagePath", derivedStoragePath != null ? derivedStoragePath : "");
+                synchronized (fileEntries) { fileEntries.add(map); }
+                if (doneCounter.incrementAndGet() == total) {
+                    finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                }
+                return;
+            }
+
+            // 3) Try parsing as Uri (content://, file://, http(s)://)
+            Uri fileUri = null;
+            try {
+                if (p.startsWith("content://") || p.startsWith("file://")) {
+                    fileUri = Uri.parse(p);
+                } else if (p.startsWith("/")) {
+                    File f = new File(p);
+                    if (f.exists()) fileUri = Uri.fromFile(f);
+                } else {
+                    // fallback parsing
+                    Uri u = Uri.parse(p);
+                    if (u != null && u.getScheme() != null) {
+                        fileUri = u;
+                    } else {
+                        // maybe plain filename in cache/local dir
+                        File f = new File(p);
+                        if (f.exists()) fileUri = Uri.fromFile(f);
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            if (fileUri == null) {
+                // Unknown form -> placeholder
+                Map<String, String> map = new HashMap<>();
+                map.put("name", displayName != null ? displayName : "unknown");
+                map.put("size", displaySize != null ? displaySize : "N/A");
+                map.put("downloadUrl", "");
+                map.put("url", "");
+                map.put("storagePath", "");
+                synchronized (fileEntries) { fileEntries.add(map); }
+                if (doneCounter.incrementAndGet() == total) {
+                    finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                }
+                return;
+            }
+
+            // At this point fileUri is non-null
+            final Uri fileUriFinal = fileUri;
+
+            // If remote http(s) - download to temp, then upload
+            if (fileUriFinal.getScheme() != null &&
+                    (fileUriFinal.getScheme().equalsIgnoreCase("http") || fileUriFinal.getScheme().equalsIgnoreCase("https"))) {
+
+                new Thread(() -> {
+                    final Uri[] tempUriHolder = new Uri[1];
+                    final File[] tempFileHolder = new File[1];
+                    try {
+                        tempUriHolder[0] = downloadUrlToTempFile(fileUriFinal);
+                        if (tempUriHolder[0] != null) {
+                            tempFileHolder[0] = new File(tempUriHolder[0].getPath());
+                        }
+                    } catch (Exception e) {
+                        Log.w("ProjectReportActivity", "download temp failed: " + e.getMessage());
+                    }
+
+                    if (tempUriHolder[0] == null) {
+                        Map<String, String> map = new HashMap<>();
+                        map.put("name", displayName != null ? displayName : "unknown");
+                        map.put("size", displaySize != null ? displaySize : "N/A");
+                        map.put("downloadUrl", "");
+                        map.put("url", "");
+                        map.put("storagePath", "");
+                        synchronized (fileEntries) { fileEntries.add(map); }
+                        if (doneCounter.incrementAndGet() == total) {
+                            runOnUiThread(() -> finalizeFileListForKey(key, fileEntries, isArchive, intentAfter));
+                        }
+                        return;
+                    }
+
+                    final StorageReference fileRef = rootRef.child(key + "/" + System.currentTimeMillis() + "_" + sanitizeFilename(displayName));
+                    UploadTask uploadTask = fileRef.putFile(tempUriHolder[0]);
+
+                    uploadTask.addOnSuccessListener(taskSnapshot -> {
+                        fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                            String downloadUrl = uri != null ? uri.toString() : "";
+                            String bucket = "";
+                            try {
+                                String conf = FirebaseApp.getInstance().getOptions().getStorageBucket();
+                                if (conf != null) bucket = conf;
+                            } catch (Exception ignored) {}
+                            String storagePath = (!bucket.isEmpty()) ? ("gs://" + bucket + "/" + fileRef.getPath()) : fileRef.getPath();
+
+                            Map<String, String> map = new HashMap<>();
+                            map.put("name", displayName != null ? displayName : sanitizeFilename(displayName));
+                            map.put("size", displaySize != null ? displaySize : "N/A");
+                            map.put("downloadUrl", downloadUrl);
+                            map.put("url", downloadUrl);
+                            map.put("storagePath", storagePath);
+                            synchronized (fileEntries) { fileEntries.add(map); }
+
+                            // cleanup
+                            try { if (tempFileHolder[0] != null && tempFileHolder[0].exists()) tempFileHolder[0].delete(); } catch (Exception ignored) {}
+
+                            if (doneCounter.incrementAndGet() == total) {
+                                runOnUiThread(() -> finalizeFileListForKey(key, fileEntries, isArchive, intentAfter));
+                            }
+                        }).addOnFailureListener(e -> {
+                            String bucket = "";
+                            try {
+                                String conf = FirebaseApp.getInstance().getOptions().getStorageBucket();
+                                if (conf != null) bucket = conf;
+                            } catch (Exception ignored) {}
+                            String storagePath = (!bucket.isEmpty()) ? ("gs://" + bucket + "/" + fileRef.getPath()) : fileRef.getPath();
+
+                            Map<String, String> map = new HashMap<>();
+                            map.put("name", displayName != null ? displayName : sanitizeFilename(displayName));
+                            map.put("size", displaySize != null ? displaySize : "N/A");
+                            map.put("downloadUrl", "");
+                            map.put("url", "");
+                            map.put("storagePath", storagePath);
+                            synchronized (fileEntries) { fileEntries.add(map); }
+
+                            try { if (tempFileHolder[0] != null && tempFileHolder[0].exists()) tempFileHolder[0].delete(); } catch (Exception ignored) {}
+
+                            if (doneCounter.incrementAndGet() == total) {
+                                runOnUiThread(() -> finalizeFileListForKey(key, fileEntries, isArchive, intentAfter));
+                            }
+                        });
+                    }).addOnFailureListener(e -> {
+                        Map<String, String> map = new HashMap<>();
+                        map.put("name", displayName != null ? displayName : sanitizeFilename(displayName));
+                        map.put("size", displaySize != null ? displaySize : "N/A");
+                        map.put("downloadUrl", "");
+                        map.put("url", "");
+                        map.put("storagePath", "");
+                        synchronized (fileEntries) { fileEntries.add(map); }
+                        try { if (tempFileHolder[0] != null && tempFileHolder[0].exists()) tempFileHolder[0].delete(); } catch (Exception ignored) {}
+                        if (doneCounter.incrementAndGet() == total) {
+                            runOnUiThread(() -> finalizeFileListForKey(key, fileEntries, isArchive, intentAfter));
+                        }
+                    });
+                }).start();
+
+                return;
+            }
+
+            // 4) content:// or file:// or local Uri -> upload directly
+            try {
+                final StorageReference fileRef = rootRef.child(key + "/" + System.currentTimeMillis() + "_" + sanitizeFilename(displayName));
+                UploadTask uploadTask = fileRef.putFile(fileUriFinal);
+
+                uploadTask.addOnSuccessListener(taskSnapshot -> {
+                    fileRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                        String downloadUrl = uri != null ? uri.toString() : "";
+                        String bucket = "";
+                        try {
+                            String conf = FirebaseApp.getInstance().getOptions().getStorageBucket();
+                            if (conf != null) bucket = conf;
+                        } catch (Exception ignored) {}
+                        String storagePath = (!bucket.isEmpty()) ? ("gs://" + bucket + "/" + fileRef.getPath()) : fileRef.getPath();
+
+                        Map<String, String> map = new HashMap<>();
+                        map.put("name", displayName != null ? displayName : sanitizeFilename(displayName));
+                        map.put("size", displaySize != null ? displaySize : "N/A");
+                        map.put("downloadUrl", downloadUrl);
+                        map.put("url", downloadUrl);
+                        map.put("storagePath", storagePath);
+                        synchronized (fileEntries) { fileEntries.add(map); }
+
+                        if (doneCounter.incrementAndGet() == total) {
+                            finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                        }
+                    }).addOnFailureListener(e -> {
+                        String bucket = "";
+                        try {
+                            String conf = FirebaseApp.getInstance().getOptions().getStorageBucket();
+                            if (conf != null) bucket = conf;
+                        } catch (Exception ignored) {}
+                        String storagePath = (!bucket.isEmpty()) ? ("gs://" + bucket + "/" + fileRef.getPath()) : fileRef.getPath();
+
+                        Map<String, String> map = new HashMap<>();
+                        map.put("name", displayName != null ? displayName : sanitizeFilename(displayName));
+                        map.put("size", displaySize != null ? displaySize : "N/A");
+                        map.put("downloadUrl", "");
+                        map.put("url", "");
+                        map.put("storagePath", storagePath);
+                        synchronized (fileEntries) { fileEntries.add(map); }
+
+                        if (doneCounter.incrementAndGet() == total) {
+                            finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                        }
+                    });
+                }).addOnFailureListener(e -> {
+                    Map<String, String> map = new HashMap<>();
+                    map.put("name", displayName != null ? displayName : sanitizeFilename(displayName));
+                    map.put("size", displaySize != null ? displaySize : "N/A");
+                    map.put("downloadUrl", "");
+                    map.put("url", "");
+                    map.put("storagePath", "");
+                    synchronized (fileEntries) { fileEntries.add(map); }
+                    if (doneCounter.incrementAndGet() == total) {
+                        finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                    }
+                });
+            } catch (Exception e) {
+                Map<String, String> map = new HashMap<>();
+                map.put("name", displayName != null ? displayName : "unknown");
+                map.put("size", displaySize != null ? displaySize : "N/A");
+                map.put("downloadUrl", "");
+                map.put("url", "");
+                map.put("storagePath", "");
+                synchronized (fileEntries) { fileEntries.add(map); }
+                if (doneCounter.incrementAndGet() == total) {
+                    finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+                }
+            }
+
+        } catch (Exception ex) {
+            Map<String, String> map = new HashMap<>();
+            map.put("name", displayName != null ? displayName : "unknown");
+            map.put("size", displaySize != null ? displaySize : "N/A");
+            map.put("downloadUrl", "");
+            map.put("url", "");
+            map.put("storagePath", "");
+            synchronized (fileEntries) { fileEntries.add(map); }
+            if (doneCounter.incrementAndGet() == total) {
+                finalizeFileListForKey(key, fileEntries, isArchive, intentAfter);
+            }
+        }
+    }
+
+    private void finalizeFileListForKey(String key, ArrayList<Map<String, String>> fileEntries, boolean isArchive, Intent intentAfter) {
+        if (isArchive) {
+            requestArchivesRef.child(key).child("files").setValue(fileEntries).addOnCompleteListener(t -> {
+                try {
+                    if (intentAfter != null) startActivity(intentAfter);
+                    finish();
+                } catch (Exception ignored) {
+                    finish();
+                }
+            });
+        } else {
+            // For projects: write project with files[] array populated
+            writeProjectToDatabase(key, fileEntries);
+        }
+    }
+
+    private boolean isFirebaseStorageDownloadUrl(String url) {
+        if (url == null) return false;
+        return url.contains("firebasestorage.googleapis.com") || url.contains("/v0/b/");
+    }
+
+    private String tryExtractStoragePathFromDownloadUrl(String url) {
+        try {
+            if (url == null) return "";
+            int idx = url.indexOf("/o/");
+            if (idx == -1) return "";
+            int start = idx + 3;
+            int q = url.indexOf('?', start);
+            String encoded = (q == -1) ? url.substring(start) : url.substring(start, q);
+            if (encoded == null) return "";
+            String decoded = URLDecoder.decode(encoded, "UTF-8");
+            return decoded;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String sanitizeFilename(String name) {
+        if (name == null) return "file";
+        return name.replaceAll("[\\\\/:*?\"<>|]+", "_");
+    }
+
+    private String parseNameFromInfo(String rawInfo) {
+        if (rawInfo == null) return null;
+        try {
+            String s = rawInfo.trim();
+            int idxOpen = s.lastIndexOf('(');
+            String namePart = (idxOpen != -1) ? s.substring(0, idxOpen).trim() : s;
+            namePart = namePart.replaceFirst("^\\d+\\.\\s*", "").trim();
+            return namePart;
+        } catch (Exception e) {
+            return rawInfo;
         }
     }
 
@@ -487,7 +809,8 @@ public class ProjectReportActivity extends AppCompatActivity {
         }
     }
 
-    // ORIGINAL actual-project upload remains (unchanged behavior)
+    // ORIGINAL actual-project upload (made robust)
+    // MODIFIED: uses processPathAndUpload to ensure every file entry has downloadUrl/storagePath when available.
     private void uploadProjectToFirebase() {
         String key = projectsRef.push().getKey();
         if (key == null) {
@@ -501,83 +824,40 @@ public class ProjectReportActivity extends AppCompatActivity {
             final int total = tempFileItems.size();
 
             for (FileTempItem fti : tempFileItems) {
-                String path = fti.path;
-                String name = fti.name;
+                final String path = fti.path != null ? fti.path : "";
+                final String name = fti.name != null ? fti.name : tryGetNameFromUriString(path);
                 String size = fti.size;
+                if (size == null || size.equalsIgnoreCase("N/A")) {
+                    long bytes = -1;
+                    try {
+                        Uri u = (path != null && !path.isEmpty()) ? Uri.parse(path) : null;
+                        if (u != null) bytes = getFileSizeBytesFromUri(u);
+                        if (bytes <= 0 && path != null) {
+                            File f = new File(path);
+                            if (f.exists()) bytes = f.length();
+                        }
+                    } catch (Exception ignored) {}
+                    size = (bytes > 0) ? formatBytesToHuman(bytes) : "N/A";
+                }
 
+                // if name indicates a primary folder entry, keep as placeholder
                 if (name != null && name.startsWith("Primary Folder:")) {
                     Map<String, String> map = new HashMap<>();
                     map.put("name", name);
                     map.put("size", "N/A");
                     map.put("url", "");
-                    fileEntries.add(map);
+                    map.put("downloadUrl", "");
+                    map.put("storagePath", "");
+                    synchronized (fileEntries) { fileEntries.add(map); }
                     if (doneCounter.incrementAndGet() == total) {
                         writeProjectToDatabase(key, fileEntries);
                     }
                     continue;
                 }
 
-                Uri fileUri = null;
-                try {
-                    if (path != null && !path.isEmpty() &&
-                            (path.startsWith("content://") || path.startsWith("file://") || path.contains("/"))) {
-                        fileUri = Uri.parse(path);
-                    }
-                } catch (Exception ignored) {}
-
-                if (fileUri == null) {
-                    Map<String, String> map = new HashMap<>();
-                    map.put("name", name != null ? name : "unknown");
-                    map.put("size", size != null ? size : "N/A");
-                    map.put("url", "");
-                    fileEntries.add(map);
-                    if (doneCounter.incrementAndGet() == total) {
-                        writeProjectToDatabase(key, fileEntries);
-                    }
-                    continue;
-                }
-
-                String finalSize = size;
-                if (finalSize == null || finalSize.equalsIgnoreCase("N/A")) {
-                    long bytes = getFileSizeBytesFromUri(fileUri);
-                    if (bytes <= 0) {
-                        try {
-                            String p = fileUri.getPath();
-                            if (p != null) {
-                                File f = new File(p);
-                                if (f.exists()) bytes = f.length();
-                            }
-                        } catch (Exception ignored) {}
-                    }
-                    finalSize = bytes > 0 ? formatBytesToHuman(bytes) : "N/A";
-                }
-
-                String filename = name != null && !name.isEmpty() ? name : (new File(fileUri.getPath())).getName();
-                StorageReference fileRef = storageRootRef.child(key + "/" + System.currentTimeMillis() + "_" + filename);
-
-                UploadTask uploadTask = fileRef.putFile(fileUri);
-                Task<Uri> urlTask = uploadTask.continueWithTask((Continuation<UploadTask.TaskSnapshot, Task<Uri>>) task -> {
-                    if (!task.isSuccessful()) throw task.getException();
-                    return fileRef.getDownloadUrl();
-                });
-
-                final String useSize = finalSize;
-                final String useName = filename;
-                urlTask.addOnCompleteListener((OnCompleteListener<Uri>) task -> {
-                    String downloadUrl = "";
-                    if (task.isSuccessful() && task.getResult() != null) {
-                        downloadUrl = task.getResult().toString();
-                    }
-                    Map<String, String> map = new HashMap<>();
-                    map.put("name", useName);
-                    map.put("size", useSize);
-                    map.put("url", downloadUrl);
-                    fileEntries.add(map);
-
-                    if (doneCounter.incrementAndGet() == total) {
-                        writeProjectToDatabase(key, fileEntries);
-                    }
-                });
+                // Delegate actual handling to the helper
+                processPathAndUpload(key, path, name != null ? name : ("file_" + System.currentTimeMillis()),
+                        size != null ? size : "N/A", fileEntries, doneCounter, total, storageRootRef, false, null);
             }
         } else {
             writeProjectToDatabase(key, new ArrayList<>());
@@ -964,5 +1244,78 @@ public class ProjectReportActivity extends AppCompatActivity {
         } catch (Exception e) {
             return email != null ? email : "Unknown User";
         }
+    }
+
+    /**
+     * Downloads an http/https URI to a temporary file in the app cache and returns a Uri to it.
+     * Returns null on failure.
+     */
+    private Uri downloadUrlToTempFile(Uri remoteUri) {
+        InputStream input = null;
+        FileOutputStream output = null;
+        HttpURLConnection connection = null;
+        File tempFile = null;
+        try {
+            URL url = new URL(remoteUri.toString());
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
+            connection.setInstanceFollowRedirects(true);
+            connection.connect();
+            int responseCode = connection.getResponseCode();
+            if (responseCode >= 400) {
+                Log.w("ProjectReportActivity", "downloadUrlToTempFile HTTP error: " + responseCode);
+                return null;
+            }
+            input = connection.getInputStream();
+            String fname = getFileNameFromUriOrUrl(remoteUri);
+            if (fname == null || fname.isEmpty()) fname = "tempfile_" + System.currentTimeMillis();
+            tempFile = new File(getCacheDir(), System.currentTimeMillis() + "_" + fname);
+            output = new FileOutputStream(tempFile);
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = input.read(buffer)) != -1) {
+                output.write(buffer, 0, len);
+            }
+            output.flush();
+            return Uri.fromFile(tempFile);
+        } catch (Exception e) {
+            Log.w("ProjectReportActivity", "downloadUrlToTempFile failed: " + e.getMessage());
+            try { if (tempFile != null && tempFile.exists()) tempFile.delete(); } catch (Exception ignored) {}
+            return null;
+        } finally {
+            try { if (input != null) input.close(); } catch (Exception ignored) {}
+            try { if (output != null) output.close(); } catch (Exception ignored) {}
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private String getFileNameFromUriOrUrl(Uri u) {
+        try {
+            // try to extract from path
+            String path = u.getPath();
+            if (path != null) {
+                int idx = path.lastIndexOf('/');
+                if (idx != -1 && idx + 1 < path.length()) {
+                    String candidate = path.substring(idx + 1);
+                    // strip query params
+                    int qidx = candidate.indexOf('?');
+                    if (qidx != -1) candidate = candidate.substring(0, qidx);
+                    if (!candidate.isEmpty()) return candidate;
+                }
+            }
+        } catch (Exception ignored) {}
+        // fallback to last path segment of full uri string
+        try {
+            String s = u.toString();
+            int idx = s.lastIndexOf('/');
+            if (idx != -1 && idx + 1 < s.length()) {
+                String candidate = s.substring(idx + 1);
+                int qidx = candidate.indexOf('?');
+                if (qidx != -1) candidate = candidate.substring(0, qidx);
+                if (!candidate.isEmpty()) return candidate;
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 }
