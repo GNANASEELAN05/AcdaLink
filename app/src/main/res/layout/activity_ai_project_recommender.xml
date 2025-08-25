@@ -82,27 +82,38 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
-            <EditText
-                android:id="@+id/messageEditText"
+            <!-- EditText with send button inside (RelativeLayout for overlay) -->
+            <RelativeLayout
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
-                android:hint="Ask AcdaLink AI something..."
-                android:background="@drawable/search_edittext_bg"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:textColor="#000000"
-                android:textColorHint="#6E6E6E"
-                android:singleLine="true"
-                android:textSize="16sp" />
+                android:background="@drawable/search_edittext_bg">
 
-            <ImageButton
-                android:id="@+id/sendButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="@android:color/transparent"
-                android:src="@drawable/ic_send"
-                android:contentDescription="Send" />
+                <EditText
+                    android:id="@+id/messageEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:hint="Ask AcdaLink AI something..."
+                    android:paddingStart="12dp"
+                    android:paddingEnd="48dp"
+                    android:textColor="#000000"
+                    android:textColorHint="#6E6E6E"
+                    android:singleLine="true"
+                    android:textSize="16sp"
+                    android:background="@android:color/transparent"/>
+
+                <ImageButton
+                    android:id="@+id/sendButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true"
+                    android:background="@android:color/transparent"
+                    android:src="@drawable/ic_send"
+                    android:contentDescription="Send"
+                    android:visibility="gone"/>
+            </RelativeLayout>
+
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

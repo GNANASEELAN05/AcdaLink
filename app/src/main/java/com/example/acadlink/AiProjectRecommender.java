@@ -2,7 +2,9 @@ package com.example.acadlink;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -80,9 +82,9 @@ public class AiProjectRecommender extends AppCompatActivity {
         // ✅ Firebase (Chats are already separate for each user by userId)
         userId = FirebaseAuth.getInstance().getCurrentUser().getUid();
         chatRef = FirebaseDatabase.getInstance()
-                .getReference("users")
+                .getReference("AI Users")
                 .child(userId)
-                .child("AI Chats");
+                .child("Chats");
 
         // ✅ Load chat history
         loadChatHistory();
@@ -105,6 +107,24 @@ public class AiProjectRecommender extends AppCompatActivity {
                 return true;
             });
             popupMenu.show();
+        });
+
+        // ✅ Show/hide send button like Instagram
+        messageEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (s.toString().trim().isEmpty()) {
+                    sendBtn.setVisibility(android.view.View.GONE);
+                } else {
+                    sendBtn.setVisibility(android.view.View.VISIBLE);
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
         });
 
         // ✅ Send button

@@ -33,7 +33,6 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -44,8 +43,8 @@ import java.util.Map;
  * Behavior:
  *  - Reads from requestArchives and shows only requests belonging to the current user.
  *  - Card layout matches your provided reference but reduced in size (padding/text/gaps).
- *  - Upload visible only when archive.status == "accepted" and not yet uploaded.
- *  - Upload action copies the archive entry to /projects/<id> and updates archive.status = "uploaded".
+ *  - Upload visible only when archive.status == "Accepted" and not yet uploaded.
+ *  - Upload action copies the archive entry to /projects/<id> and updates archive.status = "Uploaded".
  *  - Archive entry is NOT deleted (remains visible).
  */
 public class RequestToFacultyActivity extends AppCompatActivity {
@@ -170,7 +169,10 @@ public class RequestToFacultyActivity extends AppCompatActivity {
         String title = getStringChild(snapshot, "projectTitle", getStringChild(snapshot, "title", "Untitled"));
         String similarity = getStringChild(snapshot, "similarity", "N/A");
         String ai = getStringChild(snapshot, "aiGenerated", "N/A");
-        String status = getStringChild(snapshot, "status", "Requested");
+        String rawStatus = getStringChild(snapshot, "status", "Pending");
+
+        // Always capitalize the first letter of status
+        String status = capitalizeStatus(rawStatus);
 
         MaterialCardView card = new MaterialCardView(this);
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
@@ -183,7 +185,7 @@ public class RequestToFacultyActivity extends AppCompatActivity {
 
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(dp(16), dp(12), dp(16), dp(12)); // keep reference padding but slightly reduced
+        container.setPadding(dp(16), dp(12), dp(16), dp(12));
         card.addView(container);
 
         TextView tvTitle = new TextView(this);
@@ -239,8 +241,8 @@ public class RequestToFacultyActivity extends AppCompatActivity {
         btnRemove.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#9E9E9E")));
         btnRemove.setTextColor(Color.WHITE);
 
-        boolean accepted = "accepted".equalsIgnoreCase(status);
-        boolean alreadyUploaded = "uploaded".equalsIgnoreCase(status);
+        boolean accepted = "Accepted".equalsIgnoreCase(status);
+        boolean alreadyUploaded = "Uploaded".equalsIgnoreCase(status);
         btnUpload.setVisibility(accepted && !alreadyUploaded ? View.VISIBLE : View.GONE);
 
         btnRow.addView(btnUpload);
@@ -283,12 +285,10 @@ public class RequestToFacultyActivity extends AppCompatActivity {
             projectMap.put("projectTitle", projectMap.getOrDefault("projectTitle", projectMap.getOrDefault("title", "N/A")));
             projectMap.put("title", projectMap.getOrDefault("title", projectMap.getOrDefault("projectTitle", "N/A")));
             projectMap.put("request", false);
-            projectMap.put("status", "uploaded");
+            projectMap.put("status", "Uploaded");
             projectMap.put("uploadedAt", System.currentTimeMillis());
             projectMap.put("timestamp", System.currentTimeMillis());
 
-            // preserve uploader info if present
-            // write to /projects/<archiveId>
             projectsRef.child(archiveId).setValue(projectMap).addOnCompleteListener(pTask -> {
                 if (!pTask.isSuccessful()) {
                     String msg = pTask.getException() != null ? pTask.getException().getMessage() : "unknown";
@@ -296,14 +296,12 @@ public class RequestToFacultyActivity extends AppCompatActivity {
                     if (uploadBtn != null) uploadBtn.setEnabled(true);
                     return;
                 }
-                // Mark archive as uploaded but KEEP archive node (history)
-                archiveRef.child(archiveId).child("status").setValue("uploaded").addOnCompleteListener(uTask -> {
+                // Mark archive as Uploaded but KEEP archive node
+                archiveRef.child(archiveId).child("status").setValue("Uploaded").addOnCompleteListener(uTask -> {
                     if (uTask.isSuccessful()) {
                         Toast.makeText(RequestToFacultyActivity.this, "Project moved to Projects.", Toast.LENGTH_SHORT).show();
                         if (statusTv != null) statusTv.setText("Status: Uploaded");
                         if (uploadBtn != null) uploadBtn.setVisibility(View.GONE);
-                        // keep archive entry visible; do not remove
-                        // optional: navigate to MyProjects
                         startActivity(new Intent(RequestToFacultyActivity.this, MyProjects.class)
                                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
                         finish();
@@ -325,6 +323,19 @@ public class RequestToFacultyActivity extends AppCompatActivity {
             return s.isEmpty() ? def : s;
         } catch (Exception e) {
             return def;
+        }
+    }
+
+    private String capitalizeStatus(String raw) {
+        if (raw == null || raw.isEmpty()) return "Pending";
+        String lower = raw.toLowerCase(Locale.getDefault());
+        switch (lower) {
+            case "accepted": return "Accepted";
+            case "rejected": return "Rejected";
+            case "uploaded": return "Uploaded";
+            case "pending": return "Pending";
+            default:
+                return raw.substring(0, 1).toUpperCase(Locale.getDefault()) + raw.substring(1).toLowerCase(Locale.getDefault());
         }
     }
 

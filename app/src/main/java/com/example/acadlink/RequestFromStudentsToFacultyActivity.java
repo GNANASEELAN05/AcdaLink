@@ -179,8 +179,8 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
         String similarity = getStringChild(snapshot, "similarity", "N/A");
         String ai = getStringChild(snapshot, "aiGenerated", "N/A");
 
-        // Status from archive
-        String status = getStringChild(snapshot, "Status", "Requested");
+        // FIXED: always read lowercase "status" (consistent with updates)
+        String status = getStringChild(snapshot, "status", "Requested");
 
         // Card using your reference style, but reduced padding/fonts for a compact look
         MaterialCardView card = new MaterialCardView(this);
