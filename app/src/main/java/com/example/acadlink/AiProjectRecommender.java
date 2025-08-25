@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -109,6 +110,10 @@ public class AiProjectRecommender extends AppCompatActivity {
             popupMenu.show();
         });
 
+        // ✅ Make EditText behave like WhatsApp
+        messageEditText.setHorizontallyScrolling(false);
+        messageEditText.setMaxLines(Integer.MAX_VALUE);
+
         // ✅ Show/hide send button like Instagram
         messageEditText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -158,6 +163,11 @@ public class AiProjectRecommender extends AppCompatActivity {
                     }
                 });
             }
+        });
+
+        // ✅ Auto-scroll chat when keyboard opens
+        recyclerView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            recyclerView.scrollToPosition(chatList.size() - 1);
         });
     }
 
