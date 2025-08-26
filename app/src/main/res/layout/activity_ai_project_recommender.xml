@@ -68,7 +68,10 @@
             app:layout_constraintTop_toBottomOf="@id/toolbarRl"
             app:layout_constraintBottom_toTopOf="@id/messageInputLayout"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent"
+            android:overScrollMode="ifContentScrolls"
+            android:scrollbars="vertical" />
+
 
         <!-- Bottom input bar -->
         <LinearLayout

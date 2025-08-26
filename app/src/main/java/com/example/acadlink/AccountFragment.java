@@ -54,7 +54,7 @@ public class AccountFragment extends Fragment {
                 firebaseUser.sendEmailVerification()
                         .addOnSuccessListener(unused -> {
                             String email = firebaseUser.getEmail();
-                            Toast.makeText(mContext, "Verification link sent to your email: " + email, Toast.LENGTH_LONG).show();
+                            Toast.makeText(mContext, "(Check in Spam) Verification link sent to your email: " + email, Toast.LENGTH_LONG).show();
                         })
                         .addOnFailureListener(e -> Toast.makeText(mContext, "Failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
@@ -202,7 +202,7 @@ public class AccountFragment extends Fragment {
 
     private void showUnverifiedStatus() {
         binding.verificationTv.setText("Not Verified");
-        binding.verificationTv.setTextColor(ContextCompat.getColor(mContext, R.color.purple_700));
+        binding.verificationTv.setTextColor(ContextCompat.getColor(mContext, R.color.errorRed));
         binding.verificationTv.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);
     }
 }

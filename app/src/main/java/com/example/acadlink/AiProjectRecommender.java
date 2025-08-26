@@ -44,6 +44,9 @@ public class AiProjectRecommender extends AppCompatActivity {
     private DatabaseReference chatRef;
     private String userId;
 
+    // Track placeholder "Generating..." message
+    private int generatingIndex = -1;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -73,7 +76,7 @@ public class AiProjectRecommender extends AppCompatActivity {
         chatAdapter = new ChatAdapter(chatList);
 
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
-        layoutManager.setStackFromEnd(true); // ✅ Always scroll to last message
+
         recyclerView.setLayoutManager(layoutManager);
         recyclerView.setAdapter(chatAdapter);
 
@@ -114,6 +117,9 @@ public class AiProjectRecommender extends AppCompatActivity {
         messageEditText.setHorizontallyScrolling(false);
         messageEditText.setMaxLines(Integer.MAX_VALUE);
 
+        // ✅ Hide send button initially
+        sendBtn.setVisibility(android.view.View.GONE);
+
         // ✅ Show/hide send button like Instagram
         messageEditText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -145,12 +151,15 @@ public class AiProjectRecommender extends AppCompatActivity {
                 // Clear input
                 messageEditText.setText("");
 
+                // Show "Generating..." while waiting for AI
+                generatingIndex = addMessage("ai", "Generating...");
+
                 // Call Gemini
                 geminiApiHelper.askGemini(question, new GeminiApiHelper.GeminiCallback() {
                     @Override
                     public void onResponse(String reply) {
                         runOnUiThread(() -> {
-                            addMessage("ai", reply);
+                            replaceGeneratingMessage(reply);
                             saveMessageToFirebase("ai", reply);
                         });
                     }
@@ -158,7 +167,7 @@ public class AiProjectRecommender extends AppCompatActivity {
                     @Override
                     public void onError(String error) {
                         runOnUiThread(() -> {
-                            addMessage("ai", "Error: " + error);
+                            replaceGeneratingMessage("Error: " + error);
                         });
                     }
                 });
@@ -166,8 +175,20 @@ public class AiProjectRecommender extends AppCompatActivity {
         });
 
         // ✅ Auto-scroll chat when keyboard opens
-        recyclerView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
-            recyclerView.scrollToPosition(chatList.size() - 1);
+        recyclerView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            private int previousHeight = 0;
+
+            @Override
+            public void onGlobalLayout() {
+                int height = recyclerView.getHeight();
+                if (previousHeight != 0 && height < previousHeight) {
+                    // keyboard likely opened → scroll to bottom safely
+                    if (!chatList.isEmpty()) {
+                        recyclerView.post(() -> recyclerView.smoothScrollToPosition(chatList.size() - 1));
+                    }
+                }
+                previousHeight = height;
+            }
         });
     }
 
@@ -186,7 +207,7 @@ public class AiProjectRecommender extends AppCompatActivity {
                 }
                 chatAdapter.notifyDataSetChanged();
                 if (!chatList.isEmpty()) {
-                    recyclerView.scrollToPosition(chatList.size() - 1);
+                    recyclerView.smoothScrollToPosition(chatList.size() - 1);
                 }
             }
 
@@ -197,11 +218,26 @@ public class AiProjectRecommender extends AppCompatActivity {
         });
     }
 
-    // ✅ Add message to RecyclerView
-    private void addMessage(String sender, String text) {
+    // ✅ Add message to RecyclerView → return its index
+    private int addMessage(String sender, String text) {
         chatList.add(new MessageModel(sender, text));
-        chatAdapter.notifyItemInserted(chatList.size() - 1);
-        recyclerView.scrollToPosition(chatList.size() - 1);
+        int index = chatList.size() - 1;
+        chatAdapter.notifyItemInserted(index);
+        recyclerView.smoothScrollToPosition(index);
+        return index;
+    }
+
+    // ✅ Replace "Generating..." with actual reply
+    private void replaceGeneratingMessage(String newText) {
+        if (generatingIndex >= 0 && generatingIndex < chatList.size()) {
+            chatList.set(generatingIndex, new MessageModel("ai", newText));
+            chatAdapter.notifyItemChanged(generatingIndex);
+            recyclerView.smoothScrollToPosition(chatList.size() - 1);
+        } else {
+            // fallback if index is invalid
+            addMessage("ai", newText);
+        }
+        generatingIndex = -1;
     }
 
     // ✅ Save message in Firebase with timestamp

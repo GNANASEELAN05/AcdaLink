@@ -6,9 +6,10 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.text.InputType;
-import android.view.View;
+import android.util.Log;
 import android.widget.EditText;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.acadlink.databinding.ActivityDeleteAccountBinding;
@@ -16,7 +17,16 @@ import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.ListResult;
+import com.google.firebase.storage.StorageReference;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class DeleteAccountActivity extends AppCompatActivity {
 
@@ -24,6 +34,8 @@ public class DeleteAccountActivity extends AppCompatActivity {
     private FirebaseAuth firebaseAuth;
     private FirebaseUser firebaseUser;
     private ProgressDialog progressDialog;
+
+    private static final String TAG = "DeleteAccount";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,12 +120,26 @@ public class DeleteAccountActivity extends AppCompatActivity {
                 });
     }
 
+    /**
+     * Modified:
+     * - Deletes all projects uploaded by the user (database + storage)
+     * - Deletes user profile from /Users/<uid>
+     * - Deletes FirebaseAuth user
+     */
     private void deleteFromDatabaseAndAuth() {
         String uid = firebaseUser.getUid();
 
+        progressDialog.setMessage("Deleting your account...");
+        progressDialog.show();
+
+        // 1) Start background project deletion (Storage can take time, don't block UI)
+        deleteAllUserProjects(uid);
+
+        // 2) Delete Users/<uid> immediately
         FirebaseDatabase.getInstance().getReference("Users").child(uid)
                 .removeValue()
                 .addOnSuccessListener(unused -> {
+                    // 3) Delete Auth user
                     firebaseUser.delete()
                             .addOnSuccessListener(unused1 -> {
                                 progressDialog.dismiss();
@@ -129,6 +155,78 @@ public class DeleteAccountActivity extends AppCompatActivity {
                     Utils.toast(this, "Failed to delete from Database: " + e.getMessage());
                 });
     }
+
+    // Run project deletion in background but don't wait
+    private void deleteAllUserProjects(@NonNull String uid) {
+        final DatabaseReference projectsRef = FirebaseDatabase.getInstance().getReference("projects");
+        final StorageReference projectFilesRoot = FirebaseStorage.getInstance().getReference().child("project_files");
+
+        projectsRef.orderByChild("authorUid").equalTo(uid)
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        for (DataSnapshot proj : snapshot.getChildren()) {
+                            String projectId = proj.getKey();
+                            if (projectId == null) continue;
+
+                            // Delete project DB node
+                            projectsRef.child(projectId).removeValue();
+
+                            // Delete project folder in Storage (fire and forget)
+                            projectFilesRoot.child(projectId).listAll()
+                                    .addOnSuccessListener(listResult -> {
+                                        for (StorageReference item : listResult.getItems()) {
+                                            item.delete(); // async, no waiting
+                                        }
+                                        for (StorageReference prefix : listResult.getPrefixes()) {
+                                            deleteStorageFolderQuick(prefix);
+                                        }
+                                    });
+                        }
+                    }
+                    @Override public void onCancelled(@NonNull DatabaseError error) {}
+                });
+    }
+
+    // Non-blocking recursive delete
+    private void deleteStorageFolderQuick(StorageReference folderRef) {
+        folderRef.listAll()
+                .addOnSuccessListener(listResult -> {
+                    for (StorageReference item : listResult.getItems()) {
+                        item.delete();
+                    }
+                    for (StorageReference prefix : listResult.getPrefixes()) {
+                        deleteStorageFolderQuick(prefix);
+                    }
+                });
+    }
+
+
+    private void deleteStorageFolderRecursive(StorageReference folderRef, AtomicInteger pending) {
+        folderRef.listAll()
+                .addOnSuccessListener((ListResult listResult) -> {
+                    for (StorageReference item : listResult.getItems()) {
+                        pending.incrementAndGet();
+                        item.delete().addOnCompleteListener(t -> completeOne(pending, null));
+                    }
+                    for (StorageReference prefix : listResult.getPrefixes()) {
+                        pending.incrementAndGet();
+                        deleteStorageFolderRecursive(prefix, pending);
+                    }
+                    completeOne(pending, null);
+                })
+                .addOnFailureListener(e -> {
+                    Log.w(TAG, "Folder delete skipped: " + e.getMessage());
+                    completeOne(pending, null);
+                });
+    }
+
+    private void completeOne(AtomicInteger pending, Runnable onAllDone) {
+        if (pending.decrementAndGet() == 0 && onAllDone != null) {
+            runOnUiThread(onAllDone);
+        }
+    }
+
+    // ---------------------- (UNCHANGED) ----------------------
 
     private void showSuccessDialog() {
         new AlertDialog.Builder(this)
