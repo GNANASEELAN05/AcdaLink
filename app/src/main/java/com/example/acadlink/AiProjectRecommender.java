@@ -76,7 +76,7 @@ public class AiProjectRecommender extends AppCompatActivity {
         chatAdapter = new ChatAdapter(chatList);
 
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
-
+        layoutManager.setStackFromEnd(true); // keeps layout similar to WhatsApp
         recyclerView.setLayoutManager(layoutManager);
         recyclerView.setAdapter(chatAdapter);
 
@@ -174,7 +174,7 @@ public class AiProjectRecommender extends AppCompatActivity {
             }
         });
 
-        // ✅ Auto-scroll chat when keyboard opens
+        // ✅ Auto-scroll chat when keyboard opens ONLY if at bottom
         recyclerView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             private int previousHeight = 0;
 
@@ -182,14 +182,22 @@ public class AiProjectRecommender extends AppCompatActivity {
             public void onGlobalLayout() {
                 int height = recyclerView.getHeight();
                 if (previousHeight != 0 && height < previousHeight) {
-                    // keyboard likely opened → scroll to bottom safely
-                    if (!chatList.isEmpty()) {
+                    // keyboard likely opened → scroll only if user is already at bottom
+                    if (isAtBottom()) {
                         recyclerView.post(() -> recyclerView.smoothScrollToPosition(chatList.size() - 1));
                     }
                 }
                 previousHeight = height;
             }
         });
+    }
+
+    // ✅ Check if user is at bottom
+    private boolean isAtBottom() {
+        if (recyclerView == null || recyclerView.getLayoutManager() == null) return true;
+        LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+        int lastVisible = layoutManager.findLastCompletelyVisibleItemPosition();
+        return lastVisible == chatList.size() - 1;
     }
 
     // ✅ Load messages from Firebase ordered by timestamp
@@ -206,7 +214,7 @@ public class AiProjectRecommender extends AppCompatActivity {
                     }
                 }
                 chatAdapter.notifyDataSetChanged();
-                if (!chatList.isEmpty()) {
+                if (isAtBottom() && !chatList.isEmpty()) {
                     recyclerView.smoothScrollToPosition(chatList.size() - 1);
                 }
             }
@@ -223,7 +231,9 @@ public class AiProjectRecommender extends AppCompatActivity {
         chatList.add(new MessageModel(sender, text));
         int index = chatList.size() - 1;
         chatAdapter.notifyItemInserted(index);
-        recyclerView.smoothScrollToPosition(index);
+        if (isAtBottom()) {
+            recyclerView.smoothScrollToPosition(index);
+        }
         return index;
     }
 
@@ -232,9 +242,10 @@ public class AiProjectRecommender extends AppCompatActivity {
         if (generatingIndex >= 0 && generatingIndex < chatList.size()) {
             chatList.set(generatingIndex, new MessageModel("ai", newText));
             chatAdapter.notifyItemChanged(generatingIndex);
-            recyclerView.smoothScrollToPosition(chatList.size() - 1);
+            if (isAtBottom()) {
+                recyclerView.smoothScrollToPosition(chatList.size() - 1);
+            }
         } else {
-            // fallback if index is invalid
             addMessage("ai", newText);
         }
         generatingIndex = -1;
