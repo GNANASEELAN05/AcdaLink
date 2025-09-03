@@ -50,9 +50,11 @@ import java.util.Set;
  * HomeFragment
  *
  * - Keeps original behaviour and IDs unchanged.
- * - Shows badge/dot only for accepted/rejected requests that are NEW since the user's last "seen".
- * - If requests lack updatedAt, falls back to comparing saved per-request statuses so we don't repeatedly show old statuses.
- * - When user opens "Request Sent", we mark as seen and snapshot current statuses so old accepted/rejected won't reappear.
+ * - Shows badge/dot for Request Sent, Request Received and Request To Faculty.
+ * - Request To Faculty now listens requestArchives for responses (accepted/rejected) that belong to current user
+ *   and only counts new responses (compared to last-seen or per-request snapshot).
+ * - When user opens Request Sent or Request To Faculty, we mark those as seen and snapshot current statuses so old
+ *   accepted/rejected won't reappear on subsequent app launches.
  * - Centers the small dot in the popup menu using a custom ImageSpan.
  *
  * Only minimal, necessary changes applied. All IDs and other behaviours are preserved.
@@ -78,7 +80,9 @@ public class HomeFragment extends Fragment {
     // ---------- BADGE: config ----------
     private static final String BADGE_PREF = "menu_badge_prefs";
     private static final String KEY_LAST_SEEN_SENT_PREFIX = "last_seen_sent_";
+    private static final String KEY_LAST_SEEN_FACULTY_PREFIX = "last_seen_faculty_";
     private static final String KEY_KNOWN_STATUS_PREFIX = "known_status_";
+    private static final String KEY_KNOWN_FACULTY_PREFIX = "known_faculty_status_";
     // accepted / rejected words (robust to variations)
     private static final Set<String> ACCEPTED = new HashSet<>(Arrays.asList(
             "accepted","approved","granted","allow","allowed","ready","true","yes"
@@ -88,16 +92,19 @@ public class HomeFragment extends Fragment {
     ));
 
     private TextView menuBadgeView;
-    private int countSentUpdates = 0;       // accepted/rejected AFTER last seen
-    private int countReceivedPending = 0;   // current pending incoming
-    private int countFaculty = 0;           // placeholder (wire your node if needed)
+    private int countSentUpdates = 0;       // accepted/rejected AFTER last seen (downloadRequestsSent)
+    private int countReceivedPending = 0;   // current pending incoming (downloadRequestsReceived)
+    private int countFaculty = 0;           // accepted/rejected responses from faculty (requestArchives)
 
     private ValueEventListener sentListener;
     private ValueEventListener receivedListener;
+    private ValueEventListener facultyListener;
     private DatabaseReference sentRef;
     private DatabaseReference receivedRef;
+    private DatabaseReference facultyRef;
 
     private String currentUid;
+    private String currentUserEmail;
 
     public static HomeFragment newInstance(String param1, String param2) {
         HomeFragment fragment = new HomeFragment();
@@ -121,6 +128,10 @@ public class HomeFragment extends Fragment {
         projectsRef = FirebaseDatabase.getInstance().getReference("projects");
         if (FirebaseAuth.getInstance().getCurrentUser() != null) {
             currentUid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+            currentUserEmail = FirebaseAuth.getInstance().getCurrentUser().getEmail();
+        } else {
+            currentUid = null;
+            currentUserEmail = null;
         }
     }
 
@@ -161,7 +172,10 @@ public class HomeFragment extends Fragment {
                     startActivity(new Intent(getActivity(), AllProjectsActivity.class));
                     return true;
                 } else if (equalsIgnoreCase(title, "Request To Faculty")) {
-                    // If you later count faculty updates, optionally clear here similar to "Request Sent"
+                    // Mark "seen" for Request To Faculty before opening, so accepted/rejected updates clear the badge
+                    markFacultySeenNow();
+                    countFaculty = 0;
+                    updateMenuBadgeNow();
                     startActivity(new Intent(getActivity(), RequestToFacultyActivity.class));
                     return true;
                 } else if (equalsIgnoreCase(title, "Request Received")) {
@@ -227,8 +241,10 @@ public class HomeFragment extends Fragment {
         // remove listeners to avoid leaks
         if (sentRef != null && sentListener != null) sentRef.removeEventListener(sentListener);
         if (receivedRef != null && receivedListener != null) receivedRef.removeEventListener(receivedListener);
+        if (facultyRef != null && facultyListener != null) facultyRef.removeEventListener(facultyListener);
         sentListener = null;
         receivedListener = null;
+        facultyListener = null;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -348,8 +364,72 @@ public class HomeFragment extends Fragment {
         };
         receivedRef.addValueEventListener(receivedListener);
 
-        // Faculty (optional): keep zero unless you wire a node
-        countFaculty = 0;
+        // ----- FACULTY: check requestArchives for responses that belong to current user -----
+        facultyRef = FirebaseDatabase.getInstance().getReference("requestArchives");
+        facultyListener = new ValueEventListener() {
+            @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
+                long lastSeen = getPrefs().getLong(KEY_LAST_SEEN_FACULTY_PREFIX + currentUid, 0L);
+                int c = 0;
+                try {
+                    for (DataSnapshot archSnap : snapshot.getChildren()) {
+                        // Determine if this archive entry belongs to current user.
+                        boolean belongsToMe = false;
+                        if (currentUserEmail != null) {
+                            String email1 = val(archSnap, "userEmail");
+                            String email2 = val(archSnap, "requestFromEmail");
+                            if (email1 != null && currentUserEmail.equalsIgnoreCase(email1)) belongsToMe = true;
+                            else if (email2 != null && currentUserEmail.equalsIgnoreCase(email2)) belongsToMe = true;
+                        }
+                        // try possible uid fields
+                        String fromUid = val(archSnap, "requestFromUid");
+                        if (!belongsToMe && fromUid != null && currentUid != null && fromUid.equals(currentUid)) belongsToMe = true;
+                        String from = val(archSnap, "requestFrom");
+                        if (!belongsToMe && from != null && currentUid != null && from.equals(currentUid)) belongsToMe = true;
+                        // if it doesn't belong to user, skip
+                        if (!belongsToMe) continue;
+
+                        String status = val(archSnap, "status");
+                        if (!isAcceptedOrRejected(status)) continue;
+
+                        // get time: acceptedAt -> rejectedAt -> updatedAt -> timestamp
+                        Long acceptedAt = asLong(archSnap.child("acceptedAt").getValue());
+                        Long rejectedAt = asLong(archSnap.child("rejectedAt").getValue());
+                        Long updatedAt = asLong(archSnap.child("updatedAt").getValue());
+                        Long timestamp = asLong(archSnap.child("timestamp").getValue());
+
+                        Long timeRaw = acceptedAt != null ? acceptedAt : (rejectedAt != null ? rejectedAt : (updatedAt != null ? updatedAt : timestamp));
+                        boolean isNew = false;
+                        if (timeRaw != null) {
+                            long tm = toMillis(timeRaw);
+                            if (tm > lastSeen) {
+                                isNew = true;
+                            }
+                        } else {
+                            // fallback to comparing stored known faculty status for that archive id
+                            String archId = archSnap.getKey();
+                            if (archId != null) {
+                                String knownKey = KEY_KNOWN_FACULTY_PREFIX + currentUid + "_" + archId;
+                                String known = getPrefs().getString(knownKey, "");
+                                if (!known.equals(status)) {
+                                    isNew = true;
+                                }
+                            } else {
+                                // if no id/time and never seen, treat as new
+                                if (lastSeen == 0L) isNew = true;
+                            }
+                        }
+
+                        if (isNew) c++;
+                    }
+                } catch (Exception ignored) { }
+                countFaculty = c;
+                updateMenuBadgeNow();
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) { }
+        };
+        facultyRef.addValueEventListener(facultyListener);
+
+        // ensure UI updated
         updateMenuBadgeNow();
     }
 
@@ -433,6 +513,46 @@ public class HomeFragment extends Fragment {
                         String status = val(projSnap, "status");
                         if (id != null) {
                             editor.putString(KEY_KNOWN_STATUS_PREFIX + currentUid + "_" + id, status == null ? "" : status);
+                        }
+                    }
+                } catch (Exception ignored) { }
+                editor.apply();
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) { /* ignore */ }
+        });
+    }
+
+    private void markFacultySeenNow() {
+        if (currentUid == null) return;
+        final SharedPreferences prefs = getPrefs();
+        final long now = System.currentTimeMillis();
+        prefs.edit().putLong(KEY_LAST_SEEN_FACULTY_PREFIX + currentUid, now).apply();
+
+        // Snapshot current statuses in requestArchives that belong to the user
+        DatabaseReference ref = FirebaseDatabase.getInstance().getReference("requestArchives");
+        ref.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override public void onDataChange(@NonNull DataSnapshot snapshot) {
+                SharedPreferences.Editor editor = prefs.edit();
+                try {
+                    for (DataSnapshot archSnap : snapshot.getChildren()) {
+                        boolean belongsToMe = false;
+                        if (currentUserEmail != null) {
+                            String email1 = val(archSnap, "userEmail");
+                            String email2 = val(archSnap, "requestFromEmail");
+                            if (email1 != null && currentUserEmail.equalsIgnoreCase(email1)) belongsToMe = true;
+                            else if (email2 != null && currentUserEmail.equalsIgnoreCase(email2)) belongsToMe = true;
+                        }
+                        String fromUid = val(archSnap, "requestFromUid");
+                        if (!belongsToMe && fromUid != null && currentUid != null && fromUid.equals(currentUid)) belongsToMe = true;
+                        String from = val(archSnap, "requestFrom");
+                        if (!belongsToMe && from != null && currentUid != null && from.equals(currentUid)) belongsToMe = true;
+
+                        if (!belongsToMe) continue;
+
+                        String id = archSnap.getKey();
+                        String status = val(archSnap, "status");
+                        if (id != null) {
+                            editor.putString(KEY_KNOWN_FACULTY_PREFIX + currentUid + "_" + id, status == null ? "" : status);
                         }
                     }
                 } catch (Exception ignored) { }
