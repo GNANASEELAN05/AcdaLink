@@ -8,7 +8,7 @@ import okhttp3.*;
 
 public class GeminiApiHelper {
     private static final String TAG = "GeminiApiHelper";
-    private static final String API_KEY = "";
+    private static final String API_KEY = "AIzaSyBt_26v2SNqhxyrz4MOImnlaF1BmA4cW20"; // paste your key
     private static final String BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=";
 
     private final OkHttpClient client = new OkHttpClient();
