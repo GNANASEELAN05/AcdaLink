@@ -6,8 +6,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.util.Patterns;
 import android.graphics.Color;
+import android.view.WindowManager;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
 
 import com.example.acadlink.databinding.ActivityForgetPasswordBinding;
 import com.google.firebase.auth.FirebaseAuth;
@@ -25,10 +27,15 @@ public class ForgetPasswordActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Make sure system bars do not draw behind our toolbar on modern Android versions
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
         super.onCreate(savedInstanceState);
 
         binding = ActivityForgetPasswordBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        // ensure keyboard resizing so inputs and submit button are visible when keyboard shows
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         // Force background color to white
         binding.getRoot().setBackgroundColor(Color.WHITE);
