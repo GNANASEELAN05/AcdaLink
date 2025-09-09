@@ -1,4 +1,4 @@
-<!-- res/layout/activity_main.xml -->
+<?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -6,6 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFFFFF"
+    android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
     <!-- Toolbar/Header -->
@@ -44,8 +45,6 @@
         android:layout_above="@id/bottomNv" />
 
     <!-- Bottom Navigation -->
-
-    <!-- Floating Action Button like in reference -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNv"
         android:layout_width="match_parent"
@@ -54,11 +53,13 @@
         android:layout_marginBottom="0dp"
         android:background="#FFFFFF"
         android:elevation="10dp"
+        android:paddingBottom="6dp"
         app:itemIconTint="@color/nav_item_color"
         app:itemTextColor="@color/nav_item_color"
         app:labelVisibilityMode="labeled"
         app:menu="@menu/menu_bottom" />
 
+    <!-- Floating Action Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/uploadProject"
         android:layout_width="wrap_content"
@@ -68,6 +69,9 @@
         android:layout_marginBottom="40dp"
         android:src="@drawable/ic_add_white"
         app:backgroundTint="#03A9F4"
+        app:fabSize="normal"
+        app:useCompatPadding="true"
         android:contentDescription="Upload" />
+
 
 </RelativeLayout>

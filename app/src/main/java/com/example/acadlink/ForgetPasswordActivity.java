@@ -41,7 +41,7 @@ public class ForgetPasswordActivity extends AppCompatActivity {
         progressDialog.setCanceledOnTouchOutside(false);
 
         // Set static text color for toolbar title
-        binding.toolbarTitleTv.setTextColor(Color.BLACK);
+        binding.toolbarTitleTv.setTextColor(Color.WHITE);
 
         binding.toolbarBackBtn.setOnClickListener(v -> onBackPressed());
         binding.submitBtn.setOnClickListener(v -> validateData());

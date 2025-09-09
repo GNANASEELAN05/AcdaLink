@@ -35,19 +35,30 @@ import java.util.Set;
  * and fetches project details from Firebase 'projects' node).
  *
  * Clicking an item opens AllProjectSummaryActivity (same extras as AllProjectsActivity).
+ *
+ * This version registers a SharedPreferences.OnSharedPreferenceChangeListener so removals/additions
+ * of bookmarks update the UI instantly (no need to navigate away and back). It still keeps the
+ * broadcast receiver fallback in case some parts of the app send ACTION_BOOKMARKS_UPDATED.
  */
 public class MyBookMarkFragment extends Fragment {
 
     private RecyclerView recyclerView;
     private MyProjectsAdapter adapter;
-    private ArrayList<ProjectModel> bookmarkList = new ArrayList<>();
+    private final ArrayList<ProjectModel> bookmarkList = new ArrayList<>();
     private TextView emptyText;
 
     private DatabaseReference projectsRef;
     private BroadcastReceiver bookmarkReceiver;
+    private boolean isReceiverRegistered = false;
 
     private static final String PREFS_NAME = "bookmarks_prefs";
     private static final String PREFS_KEY_BOOKMARKS = "bookmarked_ids";
+
+    // track currently-known bookmarked IDs for this user so we can detect removals/additions quickly
+    private Set<String> currentBookmarked = new HashSet<>();
+
+    // SharedPreferences listener for immediate updates
+    private SharedPreferences.OnSharedPreferenceChangeListener prefsListener;
 
     public MyBookMarkFragment() {
         // Required empty public constructor
@@ -93,6 +104,79 @@ public class MyBookMarkFragment extends Fragment {
 
         projectsRef = FirebaseDatabase.getInstance().getReference("projects");
 
+        // initial UI state
+        recyclerView.setVisibility(View.GONE);
+        emptyText.setVisibility(View.VISIBLE);
+
+        // initialize prefs listener
+        prefsListener = new SharedPreferences.OnSharedPreferenceChangeListener() {
+            @Override
+            public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+                // Only respond to the per-user bookmarks key
+                String uid = getCurrentUid();
+                if (uid == null) uid = "guest";
+                String perUserKey = PREFS_KEY_BOOKMARKS + "_" + uid;
+                if (!perUserKey.equals(key)) {
+                    return;
+                }
+
+                // Read new set
+                Set<String> newSet = sharedPreferences.getStringSet(key, new HashSet<>());
+                Set<String> newBookmarked = new HashSet<>(newSet != null ? newSet : new HashSet<>());
+
+                // compute removals and additions
+                final Set<String> removed = new HashSet<>(currentBookmarked);
+                removed.removeAll(newBookmarked);
+
+                final Set<String> added = new HashSet<>(newBookmarked);
+                added.removeAll(currentBookmarked);
+
+                // Update currentBookmarked reference
+                currentBookmarked = new HashSet<>(newBookmarked);
+
+                // If there are removals, remove items from bookmarkList instantly (with notifyItemRemoved)
+                if (!removed.isEmpty()) {
+                    if (isAdded() && getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            boolean removedAny = false;
+                            for (String removedId : removed) {
+                                for (int i = 0; i < bookmarkList.size(); i++) {
+                                    ProjectModel pm = bookmarkList.get(i);
+                                    if (pm != null && removedId != null && removedId.equals(pm.getId())) {
+                                        bookmarkList.remove(i);
+                                        adapter.notifyItemRemoved(i);
+                                        removedAny = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            // Update empty view if needed
+                            if (bookmarkList.isEmpty()) {
+                                recyclerView.setVisibility(View.GONE);
+                                emptyText.setVisibility(View.VISIBLE);
+                            }
+                            if (!removedAny) {
+                                // fallback: reload from Firebase if nothing was removed locally
+                                loadBookmarkedProjects();
+                            }
+                        });
+                    } else {
+                        // fallback
+                        loadBookmarkedProjects();
+                    }
+                }
+
+                // If items were added, just reload from Firebase (ensures full project details are retrieved)
+                if (!added.isEmpty()) {
+                    if (isAdded() && getActivity() != null) {
+                        getActivity().runOnUiThread(() -> loadBookmarkedProjects());
+                    } else {
+                        loadBookmarkedProjects();
+                    }
+                }
+            }
+        };
+
         return view;
     }
 
@@ -100,15 +184,43 @@ public class MyBookMarkFragment extends Fragment {
     public void onStart() {
         super.onStart();
 
-        // Listen for bookmark changes (adapter broadcasts this action)
-        bookmarkReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                // reload bookmarked projects
-                loadBookmarkedProjects();
+        // Create receiver if needed (fallback to adapter broadcasts)
+        if (bookmarkReceiver == null) {
+            bookmarkReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    // reload bookmarked projects; do it safely
+                    try {
+                        if (isAdded() && getActivity() != null) {
+                            getActivity().runOnUiThread(() -> loadBookmarkedProjects());
+                        } else {
+                            loadBookmarkedProjects();
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            };
+        }
+
+        // Register broadcast receiver safely only once
+        if (!isReceiverRegistered && getActivity() != null) {
+            try {
+                requireActivity().registerReceiver(bookmarkReceiver, new IntentFilter(MyProjectsAdapter.ACTION_BOOKMARKS_UPDATED));
+                isReceiverRegistered = true;
+            } catch (Exception e) {
+                e.printStackTrace();
+                isReceiverRegistered = false;
             }
-        };
-        requireActivity().registerReceiver(bookmarkReceiver, new IntentFilter(MyProjectsAdapter.ACTION_BOOKMARKS_UPDATED));
+        }
+
+        // Register SharedPreferences listener for instant updates
+        try {
+            SharedPreferences sp = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            sp.registerOnSharedPreferenceChangeListener(prefsListener);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         // initial load
         loadBookmarkedProjects();
@@ -117,33 +229,53 @@ public class MyBookMarkFragment extends Fragment {
     @Override
     public void onStop() {
         super.onStop();
-        if (bookmarkReceiver != null) {
+        // unregister broadcast receiver safely
+        if (isReceiverRegistered && bookmarkReceiver != null && getActivity() != null) {
             try {
                 requireActivity().unregisterReceiver(bookmarkReceiver);
-            } catch (Exception ignored) {}
-            bookmarkReceiver = null;
+            } catch (Exception ignored) { }
+            isReceiverRegistered = false;
         }
+
+        // unregister prefs listener
+        try {
+            SharedPreferences sp = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            sp.unregisterOnSharedPreferenceChangeListener(prefsListener);
+        } catch (Exception ignored) { }
     }
 
     private void loadBookmarkedProjects() {
+        // If fragment isn't attached, abort
+        if (!isAdded()) return;
+
         // determine current user id (fallback to guest)
-        String uid = "guest";
-        try {
-            FirebaseUser u = FirebaseAuth.getInstance() != null ? FirebaseAuth.getInstance().getCurrentUser() : null;
-            if (u != null && u.getUid() != null) uid = u.getUid();
-        } catch (Exception ignored) {}
+        String uid = getCurrentUid();
+        if (uid == null) uid = "guest";
 
         // read bookmarked IDs for this user
         SharedPreferences sp = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String perUserKey = PREFS_KEY_BOOKMARKS + "_" + uid;
-        Set<String> bookmarked = new HashSet<>(sp.getStringSet(perUserKey, new HashSet<>()));
+        Set<String> rawSet = sp.getStringSet(perUserKey, new HashSet<>());
+        // copy to avoid direct modification of the stored Set
+        final Set<String> bookmarked = new HashSet<>(rawSet != null ? rawSet : new HashSet<>());
 
+        // store current set for prefs listener diffs
+        currentBookmarked = new HashSet<>(bookmarked);
+
+        // If no bookmarks - show empty
         if (bookmarked.isEmpty()) {
-            // show empty view
             bookmarkList.clear();
-            adapter.notifyDataSetChanged();
-            recyclerView.setVisibility(View.GONE);
-            emptyText.setVisibility(View.VISIBLE);
+            if (isAdded() && getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    adapter.notifyDataSetChanged();
+                    recyclerView.setVisibility(View.GONE);
+                    emptyText.setVisibility(View.VISIBLE);
+                });
+            } else {
+                adapter.notifyDataSetChanged();
+                recyclerView.setVisibility(View.GONE);
+                emptyText.setVisibility(View.VISIBLE);
+            }
             return;
         }
 
@@ -156,8 +288,6 @@ public class MyBookMarkFragment extends Fragment {
                     String key = child.getKey();
                     if (key == null) continue;
 
-                    // If this project id is bookmarked, add it (no per-user filtering here,
-                    // bookmarks may refer to any project id)
                     if (bookmarked.contains(key)) {
                         try {
                             ProjectModel model = child.getValue(ProjectModel.class);
@@ -165,24 +295,51 @@ public class MyBookMarkFragment extends Fragment {
                                 model.setId(key);
                                 bookmarkList.add(model);
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) { }
                     }
                 }
 
-                if (bookmarkList.isEmpty()) {
-                    recyclerView.setVisibility(View.GONE);
-                    emptyText.setVisibility(View.VISIBLE);
+                if (isAdded() && getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        if (bookmarkList.isEmpty()) {
+                            recyclerView.setVisibility(View.GONE);
+                            emptyText.setVisibility(View.VISIBLE);
+                        } else {
+                            recyclerView.setVisibility(View.VISIBLE);
+                            emptyText.setVisibility(View.GONE);
+                        }
+                        adapter.notifyDataSetChanged();
+                    });
                 } else {
-                    recyclerView.setVisibility(View.VISIBLE);
-                    emptyText.setVisibility(View.GONE);
+                    // fallback (very rare)
+                    if (bookmarkList.isEmpty()) {
+                        recyclerView.setVisibility(View.GONE);
+                        emptyText.setVisibility(View.VISIBLE);
+                    } else {
+                        recyclerView.setVisibility(View.VISIBLE);
+                        emptyText.setVisibility(View.GONE);
+                    }
+                    adapter.notifyDataSetChanged();
                 }
-                adapter.notifyDataSetChanged();
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
-                Toast.makeText(requireContext(), "Failed to load bookmarks: " + error.getMessage(), Toast.LENGTH_LONG).show();
+                if (isAdded() && getActivity() != null) {
+                    getActivity().runOnUiThread(() ->
+                            Toast.makeText(requireContext(), "Failed to load bookmarks: " + error.getMessage(), Toast.LENGTH_LONG).show()
+                    );
+                }
             }
         });
+    }
+
+    // helper to fetch current user id safely
+    private String getCurrentUid() {
+        try {
+            FirebaseUser u = FirebaseAuth.getInstance() != null ? FirebaseAuth.getInstance().getCurrentUser() : null;
+            if (u != null && u.getUid() != null) return u.getUid();
+        } catch (Exception ignored) {}
+        return "guest";
     }
 }

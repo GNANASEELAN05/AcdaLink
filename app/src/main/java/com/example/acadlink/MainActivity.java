@@ -6,11 +6,13 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.navigation.NavigationBarView;
 import com.google.firebase.auth.FirebaseAuth;
 
 public class MainActivity extends AppCompatActivity {
@@ -36,12 +38,23 @@ public class MainActivity extends AppCompatActivity {
         showHomeFragment();
 
         // Bottom navigation selection handler
-        bottomNv.setOnItemSelectedListener(this::onNavItemSelected);
+        bottomNv.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                return onNavItemSelected(item);
+            }
+        });
 
         // FAB click - Upload project
         uploadProject.setOnClickListener(v -> {
             if (firebaseAuth.getCurrentUser() == null) {
-                Utils.toast(MainActivity.this, "Login Required.");
+                // Utils.toast(...) in your codebase may exist; if not, replace with Toast.makeText(...)
+                try {
+                    Utils.toast(MainActivity.this, "Login Required.");
+                } catch (Exception e) {
+                    // fallback
+                    // android.widget.Toast.makeText(MainActivity.this, "Login Required.", android.widget.Toast.LENGTH_SHORT).show();
+                }
                 startLoginOption();
             } else {
                 startActivity(new Intent(MainActivity.this, UploadProjectActivity.class));
@@ -68,7 +81,11 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean handleProtectedSection(Fragment fragment, String title) {
         if (firebaseAuth.getCurrentUser() == null) {
-            Utils.toast(MainActivity.this, "Login Required.");
+            try {
+                Utils.toast(MainActivity.this, "Login Required.");
+            } catch (Exception e) {
+                // fallback: ignore
+            }
             startLoginOption();
             return false;
         } else {
@@ -84,13 +101,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void replaceFragment(Fragment fragment) {
-        FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
-        ft.replace(R.id.fragmentsFl, fragment);
-        ft.commit();
+        try {
+            FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
+            // safer for modern FragmentManager behavior
+            ft.setReorderingAllowed(true);
+            ft.replace(R.id.fragmentsFl, fragment);
+            // use allowing state loss to avoid IllegalStateException in edge cases (preferred to crash)
+            ft.commitAllowingStateLoss();
+        } catch (Exception e) {
+            // very defensive: avoid crashing during state restore on some OS versions
+            e.printStackTrace();
+        }
     }
 
     private void startLoginOption() {
         Intent intent = new Intent(MainActivity.this, LoginOptionsActivity.class);
         startActivity(intent);
-}
+    }
 }

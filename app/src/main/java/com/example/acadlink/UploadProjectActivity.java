@@ -6,6 +6,7 @@ import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.view.View;
@@ -18,6 +19,7 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.WindowCompat;
 import androidx.documentfile.provider.DocumentFile;
 
 import com.google.android.material.card.MaterialCardView;
@@ -46,6 +48,8 @@ public class UploadProjectActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Ensure system bars are NOT drawing behind content on 13+ (prevents toolbar overlap)
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_upload_project);
 
@@ -103,11 +107,8 @@ public class UploadProjectActivity extends AppCompatActivity {
                 intent.putExtra("fileCount", selectedUris.size());
                 intent.putStringArrayListExtra("fileInfoList", selectedFileInfo);
 
-                // <-- NEW: also pass the exact URIs (as strings) in the same order as the fileInfo entries (excluding the primary-folder marker)
                 ArrayList<String> uriStrings = new ArrayList<>();
-                for (Uri u : selectedUris) {
-                    uriStrings.add(u.toString());
-                }
+                for (Uri u : selectedUris) uriStrings.add(u.toString());
                 intent.putStringArrayListExtra("fileUriList", uriStrings);
 
                 startActivity(intent);
@@ -173,12 +174,17 @@ public class UploadProjectActivity extends AppCompatActivity {
             }
         } else if (requestCode == REQUEST_FOLDER) {
             Uri treeUri = data.getData();
-            getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            // Persist read permission for future access (Android 13+ strict)
+            final int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            try {
+                getContentResolver().takePersistableUriPermission(treeUri, flags);
+            } catch (SecurityException ignore) { /* already granted */ }
+
             DocumentFile folder = DocumentFile.fromTreeUri(this, treeUri);
             if (folder != null && folder.isDirectory()) {
                 int count = 1;
-                // show primary folder name in the file list UI (no addition to selectedUris here)
-                addFileToList(folder.getUri(), 0); // primary folder UI line
+                // Primary folder line (for display only)
+                addFileToList(folder.getUri(), 0);
 
                 for (DocumentFile file : folder.listFiles()) {
                     if (file.isFile()) {
@@ -188,7 +194,7 @@ public class UploadProjectActivity extends AppCompatActivity {
                             continue;
                         }
                         Uri fileUri = file.getUri();
-                        selectedUris.add(fileUri); // <-- important: child file URIs are added here
+                        selectedUris.add(fileUri);
                         totalSizeBytes += size;
                         addFileToList(fileUri, count++);
                     }
@@ -285,11 +291,13 @@ public class UploadProjectActivity extends AppCompatActivity {
         String[] type1Options = {"Software", "Hardware"};
         String[] type2Options = {"Ordinary Project", "Final Year Capstone Project"};
 
-        ArrayAdapter<String> adapter1 = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type1Options);
+        ArrayAdapter<String> adapter1 =
+                new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type1Options);
         projectType1Dropdown.setAdapter(adapter1);
         projectType1Dropdown.setOnClickListener(v -> projectType1Dropdown.showDropDown());
 
-        ArrayAdapter<String> adapter2 = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type2Options);
+        ArrayAdapter<String> adapter2 =
+                new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, type2Options);
         projectType2Dropdown.setAdapter(adapter2);
         projectType2Dropdown.setOnClickListener(v -> projectType2Dropdown.showDropDown());
     }
