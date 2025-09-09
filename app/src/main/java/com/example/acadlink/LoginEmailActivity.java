@@ -34,16 +34,18 @@ public class LoginEmailActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Keep existing edge-to-edge and system window handling
         EdgeToEdge.enable(this);
 
-        // ✅ Allow scroll when keyboard is shown
+        // Allow scroll when keyboard is shown and make system insets delivered to the root view
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         // View Binding
         binding = ActivityLoginEmailBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // ✅ Proper padding with keyboard and system bars
+        // Proper padding with keyboard and system bars
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (v, insets) -> {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
@@ -129,14 +131,9 @@ public class LoginEmailActivity extends AppCompatActivity {
         firebaseAuth.signInWithEmailAndPassword(email, password)
                 .addOnSuccessListener(authResult -> {
                     progressDialog.dismiss();
-                    FirebaseUser user = firebaseAuth.getCurrentUser();
-
-                    if (user != null && !user.isEmailVerified()) {
-                        Utils.toast(this, "Please verify your email before logging in.");
-                    } else {
-                        startActivity(new Intent(LoginEmailActivity.this, MainActivity.class));
-                        finishAffinity();
-                    }
+                    // ALLOW login regardless of email verification status
+                    startActivity(new Intent(LoginEmailActivity.this, MainActivity.class));
+                    finishAffinity();
                 })
                 .addOnFailureListener(e -> {
                     progressDialog.dismiss();
