@@ -112,7 +112,7 @@ public class ForgetPasswordActivity extends AppCompatActivity {
     private void showSuccessDialog() {
         new AlertDialog.Builder(this)
                 .setTitle("Email Sent")
-                .setMessage("Instructions to reset your password have been sent to " + email)
+                .setMessage("(Check in Spam)Instructions to reset your password have been sent to " + email)
                 .setCancelable(false)
                 .setPositiveButton("OK", (dialog, which) -> {
                     dialog.dismiss();

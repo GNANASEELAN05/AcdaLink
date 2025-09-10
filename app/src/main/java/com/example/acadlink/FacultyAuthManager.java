@@ -46,8 +46,7 @@ public class FacultyAuthManager {
     public static synchronized void addDefaultCredentialsIfEmpty() {
         if (credentials.isEmpty()) {
             // Example accounts - change these to real faculty emails/passwords for testing
-            addCredential("9922008076@klu.ac.in", "Vishnu@1718");
-            addCredential("faculty2@example.com", "secret456");
+
         }
     }
 

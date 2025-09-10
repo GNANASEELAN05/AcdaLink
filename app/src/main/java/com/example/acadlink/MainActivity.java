@@ -9,7 +9,9 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentTransaction;
+import androidx.fragment.app.FragmentActivity;
+import androidx.viewpager2.adapter.FragmentStateAdapter;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationBarView;
@@ -21,11 +23,31 @@ public class MainActivity extends AppCompatActivity {
     private View uploadProject;
     private TextView toobarTitleTv;
     private FirebaseAuth firebaseAuth;
+    private ViewPager2 fragmentsVp;
+
+    // helpers to keep bottom nav and viewpager in sync
+    private boolean isProgrammaticNav = false;
+    private int currentPage = 0;
+
+    // keep same menu IDs/order as your menu_bottom (so we changed nothing else)
+    private final int[] menuIds = {
+            R.id.menu_home,
+            R.id.menu_chats,
+            R.id.menu_my_fav,
+            R.id.menu_account
+    };
+
+    private final String[] titles = {
+            "Home",
+            "Chats",
+            "My Favorites",
+            "Account"
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main); // Ensure this matches your XML filename
+        setContentView(R.layout.activity_main); // same filename as before
 
         firebaseAuth = FirebaseAuth.getInstance();
 
@@ -33,27 +55,90 @@ public class MainActivity extends AppCompatActivity {
         bottomNv = findViewById(R.id.bottomNv);
         uploadProject = findViewById(R.id.uploadProject);
         toobarTitleTv = findViewById(R.id.toobarTitleTv);
+        fragmentsVp = findViewById(R.id.fragmentsFl); // now ViewPager2 in layout
 
-        // Set initial fragment
-        showHomeFragment();
+        // Setup ViewPager2 with adapter
+        fragmentsVp.setAdapter(new ScreenSlidePagerAdapter(this));
+        fragmentsVp.setOffscreenPageLimit(3);
 
-        // Bottom navigation selection handler
-        bottomNv.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
+        // Initialize to Home
+        fragmentsVp.setCurrentItem(0, false);
+        toobarTitleTv.setText(titles[0]);
+        isProgrammaticNav = true;
+        bottomNv.setSelectedItemId(menuIds[0]);
+        isProgrammaticNav = false;
+
+        // Handle page changes (swipes)
+        fragmentsVp.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
-            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-                return onNavItemSelected(item);
+            public void onPageSelected(int position) {
+                super.onPageSelected(position);
+
+                // If the page requires login and user is not logged in -> revert and show login
+                if (requiresLogin(position) && firebaseAuth.getCurrentUser() == null) {
+                    try {
+                        Utils.toast(MainActivity.this, "Login Required.");
+                    } catch (Exception e) {
+                        // fallback to Android Toast if Utils is not available
+                        android.widget.Toast.makeText(MainActivity.this, "Login Required.", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                    startLoginOption();
+
+                    // revert to previous page (no animation)
+                    fragmentsVp.setCurrentItem(currentPage, false);
+
+                    // keep bottom nav selection consistent
+                    isProgrammaticNav = true;
+                    bottomNv.setSelectedItemId(menuIds[currentPage]);
+                    isProgrammaticNav = false;
+                } else {
+                    // allowed page: update title and bottom navigation
+                    currentPage = position;
+                    toobarTitleTv.setText(titles[position]);
+
+                    isProgrammaticNav = true;
+                    bottomNv.setSelectedItemId(menuIds[position]);
+                    isProgrammaticNav = false;
+                }
             }
         });
 
-        // FAB click - Upload project
+        // Bottom navigation selection -> change ViewPager page (with login guard)
+        bottomNv.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                // if this selection is coming from programmatic change (ViewPager), ignore here
+                if (isProgrammaticNav) {
+                    return true;
+                }
+
+                int id = item.getItemId();
+                int pos = indexOfMenuId(id);
+                if (pos < 0) return false;
+
+                if (requiresLogin(pos) && firebaseAuth.getCurrentUser() == null) {
+                    try {
+                        Utils.toast(MainActivity.this, "Login Required.");
+                    } catch (Exception e) {
+                        android.widget.Toast.makeText(MainActivity.this, "Login Required.", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                    startLoginOption();
+                    return false; // do not select the protected item
+                } else {
+                    // allowed: move viewpager (no animation) — changed smooth scroll to false to jump instantly
+                    fragmentsVp.setCurrentItem(pos, false);
+                    return true;
+                }
+            }
+        });
+
+        // FAB click - Upload project (same logic as before)
         uploadProject.setOnClickListener(v -> {
             if (firebaseAuth.getCurrentUser() == null) {
-                // Utils.toast(...) in your codebase may exist; if not, replace with Toast.makeText(...)
                 try {
                     Utils.toast(MainActivity.this, "Login Required.");
                 } catch (Exception e) {
-                    // fallback
-                    // android.widget.Toast.makeText(MainActivity.this, "Login Required.", android.widget.Toast.LENGTH_SHORT).show();
+                    android.widget.Toast.makeText(MainActivity.this, "Login Required.", android.widget.Toast.LENGTH_SHORT).show();
                 }
                 startLoginOption();
             } else {
@@ -62,60 +147,51 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private boolean onNavItemSelected(MenuItem item) {
-        int id = item.getItemId();
-
-        if (id == R.id.menu_home) {
-            showHomeFragment();
-            return true;
-        } else if (id == R.id.menu_chats) {
-            return handleProtectedSection(new ChatsFragment(), "Chats");
-        } else if (id == R.id.menu_my_fav) {
-            return handleProtectedSection(new MyBookMarkFragment(), "My Favorites");
-        } else if (id == R.id.menu_account) {
-            return handleProtectedSection(new AccountFragment(), "Account");
-        }
-
-        return false;
+    private boolean requiresLogin(int position) {
+        // Home (position 0) is public; chats, my favorites and account (positions 1..3) require login
+        return position != 0;
     }
 
-    private boolean handleProtectedSection(Fragment fragment, String title) {
-        if (firebaseAuth.getCurrentUser() == null) {
-            try {
-                Utils.toast(MainActivity.this, "Login Required.");
-            } catch (Exception e) {
-                // fallback: ignore
-            }
-            startLoginOption();
-            return false;
-        } else {
-            toobarTitleTv.setText(title);
-            replaceFragment(fragment);
-            return true;
+    private int indexOfMenuId(int id) {
+        for (int i = 0; i < menuIds.length; i++) {
+            if (menuIds[i] == id) return i;
         }
-    }
-
-    private void showHomeFragment() {
-        toobarTitleTv.setText("Home");
-        replaceFragment(new HomeFragment());
-    }
-
-    private void replaceFragment(Fragment fragment) {
-        try {
-            FragmentTransaction ft = getSupportFragmentManager().beginTransaction();
-            // safer for modern FragmentManager behavior
-            ft.setReorderingAllowed(true);
-            ft.replace(R.id.fragmentsFl, fragment);
-            // use allowing state loss to avoid IllegalStateException in edge cases (preferred to crash)
-            ft.commitAllowingStateLoss();
-        } catch (Exception e) {
-            // very defensive: avoid crashing during state restore on some OS versions
-            e.printStackTrace();
-        }
+        return -1;
     }
 
     private void startLoginOption() {
         Intent intent = new Intent(MainActivity.this, LoginOptionsActivity.class);
         startActivity(intent);
+    }
+
+    /**
+     * Adapter for ViewPager2: returns the appropriate Fragment for each position.
+     * Order matches your bottom navigation (menu_home, menu_chats, menu_my_fav, menu_account)
+     */
+    private static class ScreenSlidePagerAdapter extends FragmentStateAdapter {
+
+        public ScreenSlidePagerAdapter(@NonNull FragmentActivity fa) {
+            super(fa);
+        }
+
+        @NonNull
+        @Override
+        public Fragment createFragment(int position) {
+            switch (position) {
+                case 1:
+                    return new ChatsFragment();
+                case 2:
+                    return new MyBookMarkFragment();
+                case 3:
+                    return new AccountFragment();
+                default:
+                    return new HomeFragment();
+            }
+        }
+
+        @Override
+        public int getItemCount() {
+            return 4; // same number of items as bottom menu
+        }
     }
 }

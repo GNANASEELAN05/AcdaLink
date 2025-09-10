@@ -174,11 +174,16 @@ public class UploadProjectActivity extends AppCompatActivity {
             }
         } else if (requestCode == REQUEST_FOLDER) {
             Uri treeUri = data.getData();
-            // Persist read permission for future access (Android 13+ strict)
-            final int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            if (treeUri == null) return;
+
+            // Persist read (and write) permission for future access. Use read|write mask for takePersistableUriPermission.
+            final int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             try {
-                getContentResolver().takePersistableUriPermission(treeUri, flags);
-            } catch (SecurityException ignore) { /* already granted */ }
+                // takePersistableUriPermission requires at least read or write flag present; guard against exceptions.
+                if (takeFlags != 0) {
+                    getContentResolver().takePersistableUriPermission(treeUri, takeFlags);
+                }
+            } catch (SecurityException | IllegalArgumentException ignored) { /* ignore if permission can't be taken */ }
 
             DocumentFile folder = DocumentFile.fromTreeUri(this, treeUri);
             if (folder != null && folder.isDirectory()) {
@@ -186,17 +191,24 @@ public class UploadProjectActivity extends AppCompatActivity {
                 // Primary folder line (for display only)
                 addFileToList(folder.getUri(), 0);
 
-                for (DocumentFile file : folder.listFiles()) {
-                    if (file.isFile()) {
-                        long size = file.length();
-                        if (totalSizeBytes + size > MAX_TOTAL_FILE_SIZE_MB * 1024 * 1024) {
-                            hasOversized = true;
-                            continue;
+                DocumentFile[] files = folder.listFiles();
+                if (files != null) {
+                    for (DocumentFile file : files) {
+                        try {
+                            if (file != null && file.isFile()) {
+                                long size = file.length();
+                                if (totalSizeBytes + size > MAX_TOTAL_FILE_SIZE_MB * 1024 * 1024) {
+                                    hasOversized = true;
+                                    continue;
+                                }
+                                Uri fileUri = file.getUri();
+                                selectedUris.add(fileUri);
+                                totalSizeBytes += size;
+                                addFileToList(fileUri, count++);
+                            }
+                        } catch (Exception ignore) {
+                            // Robustly ignore problematic file entries so the whole operation doesn't crash.
                         }
-                        Uri fileUri = file.getUri();
-                        selectedUris.add(fileUri);
-                        totalSizeBytes += size;
-                        addFileToList(fileUri, count++);
                     }
                 }
             }
@@ -303,22 +315,40 @@ public class UploadProjectActivity extends AppCompatActivity {
     }
 
     private long getFileSize(Uri uri) {
+        if (uri == null) return 0;
         try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
                 int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
-                if (sizeIndex != -1) return cursor.getLong(sizeIndex);
+                if (sizeIndex != -1) {
+                    try {
+                        return cursor.getLong(sizeIndex);
+                    } catch (Exception ignore) {
+                        // some providers may return non-long or throw; ignore and fall back
+                    }
+                }
             }
+        } catch (Exception ignore) {
+            // defensive: some providers may throw for certain URIs; return 0 if so
         }
         return 0;
     }
 
     private String getFileName(Uri uri) {
+        if (uri == null) return "Unknown";
         try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
                 int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                if (nameIndex != -1) return cursor.getString(nameIndex);
+                if (nameIndex != -1) {
+                    try {
+                        String name = cursor.getString(nameIndex);
+                        if (name != null) return name;
+                    } catch (Exception ignore) { /* fallback below */ }
+                }
             }
+        } catch (Exception ignore) {
+            // ignore and fall back
         }
-        return uri.getLastPathSegment();
+        String last = uri.getLastPathSegment();
+        return last != null ? last : "Unknown";
     }
 }

@@ -36,8 +36,8 @@
             android:background="@color/colorGray02" />
     </RelativeLayout>
 
-    <!-- Fragment container -->
-    <FrameLayout
+    <!-- Fragment container replaced by ViewPager2 for swipe navigation -->
+    <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/fragmentsFl"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

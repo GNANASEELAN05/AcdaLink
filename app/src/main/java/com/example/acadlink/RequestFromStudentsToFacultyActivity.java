@@ -383,7 +383,7 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
 
             archiveRef.child(pid).updateChildren(updates).addOnCompleteListener(task -> {
                 if (task.isSuccessful()) {
-                    Toast.makeText(RequestFromStudentsToFacultyActivity.this, "Rejected (archived)", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(RequestFromStudentsToFacultyActivity.this, "Rejected", Toast.LENGTH_SHORT).show();
                     tvStatus.setText("Status: " + finalStatus);
                     btnAccept.setEnabled(false);
                     btnReject.setEnabled(false);
