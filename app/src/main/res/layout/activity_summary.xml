@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFFFFF"
+    tools:context=".Summary">
+
+    <!-- Toolbar -->
+    <RelativeLayout
+        android:id="@+id/toolbarRl"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="#03A9F4">
+
+        <ImageButton
+            android:id="@+id/toolbarBackBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:background="@android:color/transparent"
+            android:padding="10dp"
+            android:src="@drawable/ic_back_white"
+            android:tint="@android:color/white" />
+
+        <TextView
+            android:id="@+id/toolbarTitleTv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:text="Students Project Summary"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <!-- Scrollable Table content - placed above the bottom button bar -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/summaryScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/toolbarRl"
+        android:layout_above="@+id/summaryBottomBar"
+        android:padding="12dp">
+
+        <TableLayout
+            android:id="@+id/summaryTable"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stretchColumns="1"
+            android:background="#FFFFFF">
+            <!-- Rows added programmatically by Summary.java -->
+        </TableLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Bottom stable bar with equal-sized Accept & Reject buttons -->
+    <LinearLayout
+        android:id="@+id/summaryBottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_alignParentBottom="true"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="#FFFFFF"
+        android:weightSum="2">
+
+        <!-- Reject Button (equal width) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnReject"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Reject"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:backgroundTint="#F44336"
+            app:cornerRadius="10dp"
+            android:layout_marginEnd="6dp" />
+
+        <!-- Accept Button (equal width) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAccept"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text="Accept"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:backgroundTint="#4CAF50"
+            app:cornerRadius="10dp"
+            android:layout_marginStart="6dp" />
+
+    </LinearLayout>
+
+</RelativeLayout>

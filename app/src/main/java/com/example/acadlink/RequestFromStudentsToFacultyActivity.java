@@ -5,7 +5,10 @@ import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.text.Spannable;
+import android.text.SpannableString;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -33,6 +36,7 @@ import com.google.firebase.database.ValueEventListener;
 
 import android.util.Log;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -42,9 +46,8 @@ import java.util.Map;
  *
  * Behavior:
  *  - Compact card layout matching your provided reference, but reduced size (padding/text/gaps).
- *  - Accept -> updates requestArchives/<id>/status = "accepted" and adds facultyApproval; disables both buttons.
- *  - Reject -> updates requestArchives/<id>/status = "rejected" and adds facultyApproval; disables both buttons.
- *  - Cards remain visible in the archive (history).
+ *  - Accept/Reject buttons moved to Summary (see Summary.java).
+ *  - View -> opens Summary activity with the project details (title, similarity, aiGenerated, abstract, methodology, files...)
  */
 public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
 
@@ -90,7 +93,6 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
             });
         }
 
-        // Replace the XML sample card with a vertical container (so we can render many)
         if (requestCardTemplate != null) {
             ViewGroup parent = (ViewGroup) requestCardTemplate.getParent();
             if (parent != null) {
@@ -121,7 +123,6 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
     private void loadAllArchivedRequests() {
         if (requestsContainer == null) return;
 
-        // Show entire archive (history). Cards remain visible regardless of status.
         archiveRef.orderByChild("timestamp").addValueEventListener(new ValueEventListener() {
             @Override public void onDataChange(DataSnapshot snapshot) {
                 requestsContainer.removeAllViews();
@@ -179,14 +180,16 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
         String similarity = getStringChild(snapshot, "similarity", "N/A");
         String ai = getStringChild(snapshot, "aiGenerated", "N/A");
 
-        // FIXED: always read lowercase "status" (consistent with updates)
+        // read current status (case-insensitive)
         String status = getStringChild(snapshot, "status", "Requested");
 
-        // Card using your reference style, but reduced padding/fonts for a compact look
+        // Capitalize first letter for status display
+        String displayStatus = status.substring(0, 1).toUpperCase(Locale.ROOT) + status.substring(1).toLowerCase(Locale.ROOT);
+
         MaterialCardView card = new MaterialCardView(this);
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardLp.setMargins(dp(8), dp(6), dp(8), dp(8)); // horizontal margin reduced, vertical ~6-8dp
+        cardLp.setMargins(dp(8), dp(6), dp(8), dp(8));
         card.setLayoutParams(cardLp);
         card.setRadius(dp(10));
         card.setUseCompatPadding(true);
@@ -195,7 +198,7 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
 
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setPadding(dp(12), dp(10), dp(12), dp(10)); // compact padding
+        container.setPadding(dp(12), dp(10), dp(12), dp(10));
 
         TextView tvFrom = new TextView(this);
         tvFrom.setText("Request from: " + (name != null ? name : "Unknown"));
@@ -218,28 +221,31 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
         tvTitle.setTextColor(0xFF000000);
         container.addView(tvTitle);
 
+        // Similarity with green/red percentage logic
         TextView tvSim = new TextView(this);
-        tvSim.setText("Similarity: " + (similarity != null ? similarity : "N/A"));
         tvSim.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         tvSim.setPadding(0, dp(6), 0, 0);
         tvSim.setTextColor(0xFF000000);
+        tvSim.setText(createLabeledSpannableWithColoredPercent("Similarity: ", similarity));
         container.addView(tvSim);
 
+        // AI generated with same percent logic
         TextView tvAi = new TextView(this);
-        tvAi.setText("AI generated: " + (ai != null ? ai : "N/A"));
         tvAi.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         tvAi.setPadding(0, dp(6), 0, 0);
         tvAi.setTextColor(0xFF000000);
+        tvAi.setText(createLabeledSpannableWithColoredPercent("AI generated: ", ai));
         container.addView(tvAi);
 
         TextView tvStatus = new TextView(this);
-        tvStatus.setText("Status: " + status);
+        tvStatus.setText("Status: " + displayStatus);
         tvStatus.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         tvStatus.setPadding(0, dp(10), 0, 0);
         tvStatus.setTypeface(tvStatus.getTypeface(), android.graphics.Typeface.ITALIC);
         tvStatus.setTextColor(0xFF000000);
         container.addView(tvStatus);
 
+        // Buttons row: kept only View button here (Accept/Reject moved to Summary)
         LinearLayout btnRow = new LinearLayout(this);
         LinearLayout.LayoutParams btnRowLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -251,172 +257,93 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
         LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 
-        MaterialButton btnReject = new MaterialButton(this);
-        btnReject.setText("Reject");
-        btnReject.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        btnReject.setCornerRadius(dp(8));
-        btnReject.setPadding(dp(13), dp(8), dp(13), dp(8));
-        btnReject.setLayoutParams(buttonLp);
-        btnReject.setMinWidth(dp(80));
-        btnReject.setMaxLines(1);
-        btnReject.setAllCaps(false);
-        btnReject.setTextColor(Color.WHITE);
-        btnReject.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#F44336")));
+        MaterialButton btnView = new MaterialButton(this);
+        btnView.setText("View");
+        btnView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        btnView.setBackgroundTintList(ColorStateList.valueOf(0xFF9E9E9E));
+        btnView.setCornerRadius(dp(6));
+        btnView.setLayoutParams(buttonLp);
+        btnRow.addView(btnView);
 
-        MaterialButton btnAccept = new MaterialButton(this);
-        btnAccept.setText("Accept");
-        btnAccept.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        btnAccept.setCornerRadius(dp(8));
-        LinearLayout.LayoutParams acceptLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        acceptLp.setMargins(dp(8), 0, dp(8), 0);
-        btnAccept.setLayoutParams(acceptLp);
-        btnAccept.setPadding(dp(13), dp(8), dp(13), dp(8));
-        btnAccept.setMinWidth(dp(80));
-        btnAccept.setMaxLines(1);
-        btnAccept.setAllCaps(false);
-        btnAccept.setTextColor(Color.WHITE);
-        btnAccept.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#4CAF50")));
-
-        MaterialButton btnRemove = new MaterialButton(this);
-        btnRemove.setText("Hide");
-        btnRemove.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        btnRemove.setCornerRadius(dp(8));
-        btnRemove.setLayoutParams(buttonLp);
-        btnRemove.setPadding(dp(13), dp(8), dp(13), dp(8));
-        btnRemove.setMinWidth(dp(84));
-        btnRemove.setMaxLines(1);
-        btnRemove.setAllCaps(false);
-        btnRemove.setTextColor(Color.WHITE);
-        btnRemove.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#9E9E9E")));
-
-        // disable accept/reject if already decided
-        boolean decided = "accepted".equalsIgnoreCase(status) || "rejected".equalsIgnoreCase(status) || "uploaded".equalsIgnoreCase(status);
-        btnAccept.setEnabled(!decided);
-        btnReject.setEnabled(!decided);
-        btnAccept.setAlpha(!decided ? 1f : 0.5f);
-        btnReject.setAlpha(!decided ? 1f : 0.5f);
-
-        btnRow.addView(btnReject);
-        btnRow.addView(btnAccept);
-        btnRow.addView(btnRemove);
+        btnView.setOnClickListener(v -> {
+            try {
+                Intent intent = new Intent(RequestFromStudentsToFacultyActivity.this, Summary.class);
+                intent.putExtra("projectId", pid);
+                intent.putExtra("projectTitle", title != null ? title : "N/A");
+                intent.putExtra("similarity", similarity != null ? similarity : "N/A");
+                intent.putExtra("aiGenerated", ai != null ? ai : "N/A");
+                intent.putExtra("projectType1", getStringChild(snapshot, "projectType1", getStringChild(snapshot, "projectType", "N/A")));
+                intent.putExtra("projectType2", getStringChild(snapshot, "projectType2", getStringChild(snapshot, "projectTypeLevel", getStringChild(snapshot, "projectLevel", "N/A"))));
+                intent.putExtra("abstract", getStringChild(snapshot, "abstract", "N/A"));
+                intent.putExtra("methodology", getStringChild(snapshot, "methodology", "N/A"));
+                ArrayList<String> fileInfoList = new ArrayList<>();
+                ArrayList<String> fileUriList = new ArrayList<>();
+                try {
+                    for (DataSnapshot f : snapshot.child("files").getChildren()) {
+                        String fname = getStringChild(f, "name", "");
+                        String fsize = getStringChild(f, "size", "");
+                        String downloadUrl = getStringChild(f, "downloadUrl", "");
+                        String url = getStringChild(f, "url", "");
+                        String storagePath = getStringChild(f, "storagePath", "");
+                        String chosenUri = !downloadUrl.isEmpty() ? downloadUrl : (!url.isEmpty() ? url : (!storagePath.isEmpty() ? storagePath : ""));
+                        String info = fname.isEmpty() ? "unknown" : fname;
+                        if (!fsize.isEmpty() && !"N/A".equalsIgnoreCase(fsize)) info += " (" + fsize + ")";
+                        fileInfoList.add(info);
+                        fileUriList.add(chosenUri);
+                    }
+                } catch (Exception ignored) {}
+                if (!fileInfoList.isEmpty()) intent.putStringArrayListExtra("fileInfoList", fileInfoList);
+                if (!fileUriList.isEmpty()) intent.putStringArrayListExtra("fileUriList", fileUriList);
+                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(intent);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to open summary: " + e.getMessage());
+                Toast.makeText(this, "Unable to open summary", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         container.addView(btnRow);
         card.addView(container);
-
-        // Remove/hide only the UI card
-        btnRemove.setOnClickListener(v -> {
-            if (requestsContainer != null) requestsContainer.removeView(card);
-        });
-
-        // Accept: update archive node only (status + facultyApproval)
-        btnAccept.setOnClickListener(v -> {
-            btnAccept.setEnabled(false);
-            btnReject.setEnabled(false);
-            btnAccept.setAlpha(0.5f);
-            btnReject.setAlpha(0.5f);
-
-            FirebaseUser user = auth.getCurrentUser();
-            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-            String finalStatus = "Accepted";
-
-            Map<String, Object> facultyApproval = new HashMap<>();
-            facultyApproval.put("status", finalStatus);
-            facultyApproval.put("reviewedAt", System.currentTimeMillis());
-            if (user != null) {
-                facultyApproval.put("reviewedBy", user.getUid());
-                facultyApproval.put("reviewedByEmail", user.getEmail() != null ? user.getEmail() : "");
-            } else if (prefs.getBoolean(KEY_LOGGED_IN, false)) {
-                facultyApproval.put("reviewedBy", "faculty_local");
-                facultyApproval.put("reviewedByEmail", prefs.getString(KEY_EMAIL, ""));
-            }
-
-            Map<String, Object> updates = new HashMap<>();
-            updates.put("status", finalStatus);
-            updates.put("facultyApproval", facultyApproval);
-            updates.put("acceptedAt", System.currentTimeMillis());
-
-            archiveRef.child(pid).updateChildren(updates).addOnCompleteListener(task -> {
-                if (task.isSuccessful()) {
-                    Toast.makeText(RequestFromStudentsToFacultyActivity.this, "Accepted", Toast.LENGTH_SHORT).show();
-                    tvStatus.setText("Status: " + finalStatus);
-                    btnAccept.setEnabled(false);
-                    btnReject.setEnabled(false);
-                } else {
-                    String msg = task.getException() != null ? task.getException().getMessage() : "Unknown error";
-                    Toast.makeText(RequestFromStudentsToFacultyActivity.this, "Failed to accept: " + msg, Toast.LENGTH_LONG).show();
-                    Log.w(TAG, "accept failed: " + msg);
-                    // revert UI
-                    btnAccept.setEnabled(true);
-                    btnReject.setEnabled(true);
-                    btnAccept.setAlpha(1f);
-                    btnReject.setAlpha(1f);
-                }
-            });
-        });
-
-        // Reject: update archive node only (status + facultyApproval) — do NOT delete
-        btnReject.setOnClickListener(v -> {
-            btnAccept.setEnabled(false);
-            btnReject.setEnabled(false);
-            btnAccept.setAlpha(0.5f);
-            btnReject.setAlpha(0.5f);
-
-            FirebaseUser user = auth.getCurrentUser();
-            SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-            String finalStatus = "Rejected";
-
-            Map<String, Object> facultyApproval = new HashMap<>();
-            facultyApproval.put("status", finalStatus);
-            facultyApproval.put("reviewedAt", System.currentTimeMillis());
-            if (user != null) {
-                facultyApproval.put("reviewedBy", user.getUid());
-                facultyApproval.put("reviewedByEmail", user.getEmail() != null ? user.getEmail() : "");
-            } else if (prefs.getBoolean(KEY_LOGGED_IN, false)) {
-                facultyApproval.put("reviewedBy", "faculty_local");
-                facultyApproval.put("reviewedByEmail", prefs.getString(KEY_EMAIL, ""));
-            }
-
-            Map<String, Object> updates = new HashMap<>();
-            updates.put("status", finalStatus);
-            updates.put("facultyApproval", facultyApproval);
-            updates.put("rejectedAt", System.currentTimeMillis());
-
-            archiveRef.child(pid).updateChildren(updates).addOnCompleteListener(task -> {
-                if (task.isSuccessful()) {
-                    Toast.makeText(RequestFromStudentsToFacultyActivity.this, "Rejected", Toast.LENGTH_SHORT).show();
-                    tvStatus.setText("Status: " + finalStatus);
-                    btnAccept.setEnabled(false);
-                    btnReject.setEnabled(false);
-                } else {
-                    String msg = task.getException() != null ? task.getException().getMessage() : "Unknown error";
-                    Toast.makeText(RequestFromStudentsToFacultyActivity.this, "Failed to reject: " + msg, Toast.LENGTH_LONG).show();
-                    Log.w(TAG, "reject failed: " + msg);
-                    // revert UI
-                    btnAccept.setEnabled(true);
-                    btnReject.setEnabled(true);
-                    btnAccept.setAlpha(1f);
-                    btnReject.setAlpha(1f);
-                }
-            });
-        });
-
         return card;
     }
 
-    // Helpers
+    // highlight percentage in red if >15, else green
+    private CharSequence createLabeledSpannableWithColoredPercent(String label, String value) {
+        if (value == null) value = "N/A";
+        String display = label + value;
+        SpannableString ss = new SpannableString(display);
+        try {
+            String trimmed = value.trim();
+            int percentIndex = trimmed.indexOf('%');
+            if (percentIndex != -1) {
+                int startNum = percentIndex - 1;
+                while (startNum >= 0 && (Character.isDigit(trimmed.charAt(startNum)) || trimmed.charAt(startNum) == '.')) startNum--;
+                startNum++;
+                String numStr = trimmed.substring(startNum, percentIndex);
+                float val = Float.parseFloat(numStr);
+                int color = (val > 15f) ? Color.RED : Color.parseColor("#388E3C");
+                int offset = label.length();
+                int colorStart = offset + startNum;
+                int colorEnd = offset + percentIndex + 1;
+                if (colorStart >= 0 && colorEnd <= ss.length() && colorStart < colorEnd) {
+                    ss.setSpan(new ForegroundColorSpan(color), colorStart, colorEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+            }
+        } catch (Exception ignored) {}
+        return ss;
+    }
+
     private String getStringChild(DataSnapshot parent, String key, String def) {
         try {
             Object v = parent.child(key).getValue();
             if (v == null) return def;
             String s = v.toString().trim();
             return s.isEmpty() ? def : s;
-        } catch (Exception e) {
-            return def;
-        }
+        } catch (Exception e) { return def; }
     }
 
     private void goToLogin() {
-        Intent i = new Intent(RequestFromStudentsToFacultyActivity.this, LoginOptionsActivity.class);
+        Intent i = new Intent(this, LoginOptionsActivity.class);
         i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(i);
         finish();
@@ -438,15 +365,11 @@ public class RequestFromStudentsToFacultyActivity extends AppCompatActivity {
                 if (Character.isLetter(p.charAt(0))) {
                     b.append(Character.toUpperCase(p.charAt(0)));
                     if (p.length() > 1) b.append(p.substring(1).toLowerCase(Locale.getDefault()));
-                } else {
-                    b.append(p);
-                }
+                } else b.append(p);
                 b.append(' ');
             }
             String out = b.toString().trim();
             return out.isEmpty() ? email : out;
-        } catch (Exception e) {
-            return email != null ? email : "Unknown User";
-        }
+        } catch (Exception e) { return email != null ? email : "Unknown User"; }
     }
 }

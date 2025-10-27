@@ -125,42 +125,18 @@
                         android:gravity="end"
                         android:orientation="horizontal">
 
+                        <!-- View button (kept) -->
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnReject"
+                            android:id="@+id/btnView"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Reject"
-                            android:textColor="@android:color/white"
-                            android:backgroundTint="#F44336"
-                            app:cornerRadius="10dp" />
-
-                        <View
-                            android:layout_width="10dp"
-                            android:layout_height="1dp" />
-
-                        <!-- Accept = GREEN -->
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnAccept"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Accept"
-                            android:textColor="@android:color/white"
-                            android:backgroundTint="#4CAF50"
-                            app:cornerRadius="10dp" />
-
-                        <View
-                            android:layout_width="10dp"
-                            android:layout_height="1dp" />
-
-                        <!-- Remove button (new) -->
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnRemove"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Remove"
+                            android:text="View"
                             android:textColor="@android:color/white"
                             android:backgroundTint="#9E9E9E"
                             app:cornerRadius="10dp" />
+
+                        <!-- Accept & Reject removed from card as requested -->
+
                     </LinearLayout>
 
                 </LinearLayout>

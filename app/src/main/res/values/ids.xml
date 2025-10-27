@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="summaryAbstractText" type="id" />
+    <item name="summaryMethodologyText" type="id" />
+    <item name="summaryFilesContainer" type="id" />
+</resources>
