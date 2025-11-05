@@ -6,6 +6,9 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -19,6 +22,8 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.drawable.RoundedBitmapDrawable;
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -38,6 +43,9 @@ import java.util.Locale;
  * - Modified: Shows SMS, Call and WhatsApp entries.
  * - Modified: Clicking a chat item opens SMS, Dialer or WhatsApp depending on 'via'.
  * - Other IDs/behaviour preserved.
+ *
+ * Note: This file only changed to ensure WhatsApp fallback drawable (whatsapp_logo)
+ * is displayed in a circular/rounded shape to match other icons.
  */
 public class ChatsFragment extends Fragment {
 
@@ -188,7 +196,7 @@ public class ChatsFragment extends Fragment {
                     // Improved WhatsApp icon resolution:
                     // 1) Try to find an activity that can handle the whatsapp://send URI (preferred).
                     // 2) If none, try known package names (standard & business).
-                    // 3) Fallback to generic chat drawable.
+                    // 3) Fallback to app drawable (whatsapp_logo) so WhatsApp logo always visible.
                     try {
                         Intent waProbe = new Intent(Intent.ACTION_VIEW, Uri.parse("whatsapp://send?phone=1234567890"));
                         List<ResolveInfo> waHandlers = pm.queryIntentActivities(waProbe, 0);
@@ -212,7 +220,16 @@ public class ChatsFragment extends Fragment {
                         }
                     }
 
-                    if (icon == null) icon = ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat);
+                    // Use app drawable fallback so WhatsApp logo is visible even if package icon isn't found
+                    if (icon == null) {
+                        // Use a drawable resource named whatsapp_logo placed in res/drawable/
+                        try {
+                            icon = ContextCompat.getDrawable(ctx, R.drawable.whatsapp_logo);
+                        } catch (Exception ignored) {
+                            // last resort fallback to generic chat icon
+                            icon = ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat);
+                        }
+                    }
                 } else {
                     // SMS icon - prefer default sms app's icon
                     String smsPkg = null;
@@ -233,13 +250,22 @@ public class ChatsFragment extends Fragment {
                     if (icon == null) icon = ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat);
                 }
 
-                holder.icon.setImageDrawable(icon);
+                // convert to circular/rounded drawable before setting to ImageView (this ensures consistent shape)
+                Drawable rounded = toRoundedDrawable(icon, ctx);
+                holder.icon.setImageDrawable(rounded);
             } catch (Exception e) {
                 // fallback
                 if (it.via != null && it.via.equalsIgnoreCase("call"))
-                    holder.icon.setImageDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.ic_menu_call));
-                else
-                    holder.icon.setImageDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat));
+                    holder.icon.setImageDrawable(toRoundedDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.ic_menu_call), ctx));
+                else if (it.via != null && it.via.equalsIgnoreCase("whatsapp")) {
+                    // Try to set our drawable fallback here as well (rounded)
+                    try {
+                        holder.icon.setImageDrawable(toRoundedDrawable(ContextCompat.getDrawable(ctx, R.drawable.whatsapp_logo), ctx));
+                    } catch (Exception ignored) {
+                        holder.icon.setImageDrawable(toRoundedDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat), ctx));
+                    }
+                } else
+                    holder.icon.setImageDrawable(toRoundedDrawable(ContextCompat.getDrawable(ctx, android.R.drawable.sym_action_chat), ctx));
             }
 
             holder.itemView.setOnClickListener(v -> {
@@ -348,6 +374,34 @@ public class ChatsFragment extends Fragment {
                 return pm.getApplicationIcon(pkg);
             } catch (Exception ignored) { }
             return null;
+        }
+
+        /**
+         * Convert any Drawable to a circular RoundedBitmapDrawable.
+         * If the drawable is already a bitmap drawable, reuse its bitmap; otherwise draw it onto a bitmap.
+         */
+        private Drawable toRoundedDrawable(Drawable src, Context context) {
+            if (src == null || context == null) return null;
+            try {
+                Bitmap bmp;
+                if (src instanceof BitmapDrawable) {
+                    bmp = ((BitmapDrawable) src).getBitmap();
+                } else {
+                    int w = src.getIntrinsicWidth() > 0 ? src.getIntrinsicWidth() : 128;
+                    int h = src.getIntrinsicHeight() > 0 ? src.getIntrinsicHeight() : 128;
+                    bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(bmp);
+                    src.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+                    src.draw(canvas);
+                }
+                RoundedBitmapDrawable rounded = RoundedBitmapDrawableFactory.create(context.getResources(), bmp);
+                rounded.setCircular(true);
+                // optionally control corner radius with: rounded.setCornerRadius(Math.max(bmp.getWidth(), bmp.getHeight())/2f);
+                return rounded;
+            } catch (Exception e) {
+                // fallback: return original drawable if something goes wrong
+                return src;
+            }
         }
     }
 
