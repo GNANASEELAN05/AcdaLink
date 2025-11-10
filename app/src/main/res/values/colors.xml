@@ -20,6 +20,8 @@
     <color name="green">#00FF00</color>
     <color name="red">#F44336</color>
     <color name="red_light">#FFFFCDD2</color>
+    <color name="my_custom_blue">#03A9F4</color>
+
 
     <!-- Dark theme background -->
     <color name="darkBackground">#121212</color> <!-- Or any dark shade you prefer -->

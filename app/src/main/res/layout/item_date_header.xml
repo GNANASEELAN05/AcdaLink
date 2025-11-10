@@ -16,7 +16,7 @@
         android:textAllCaps="false"
         android:textSize="14sp"
         android:textStyle="bold"
-        android:textColor="#444444"
+        android:textColor="@android:color/white"
         android:paddingLeft="12dp"
         android:paddingRight="12dp"
         android:background="@drawable/date_header_background" />
